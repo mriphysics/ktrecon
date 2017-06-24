@@ -486,102 +486,31 @@ priNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_pri_mag' ) );
 priNiiFilePath = mrecon_writenifti( PRI, priNiiFilePath, 'frameduration', frameDuration );
 dcNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_mag' ) );
 dcNiiFilePath  = mrecon_writenifti( DC, dcNiiFilePath );
+
+% Display Time Elapsed Message
+disp_time_elapsed_msg( toc ),
 disp_write_file_msg( rltNiiFilePath )
 disp_write_file_msg( priNiiFilePath )
 disp_write_file_msg( dcNiiFilePath )
 
 
-%% Separate Slices
+%% Save as Slices
+%  separate m2d stack into 2d+time slices
 
-% Save m2d Stack as NIfTI
-rltCpxNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_cpx' ) );
-rltCpxNiiFilePath = mrecon_writenifti( RCN, rltCpxNiiFilePath, 'complex', true, 'frameduration', frameDuration );
-rltCpxNiiFileName = filename( rltCpxNiiFilePath );
+disp_start_step_msg( 'Separating m2d' ),
+fprintf( '\n' )
 
-% Get Frame Duration
-frameDuration = mrecon_calc_frame_duration( RCN );
+niiFileNamePrefix = strcat( outFilePrefix, '_rlt_cpx' );
+niiFilePaths = mrecon_writenifti2d( RCN, outputDirPath, niiFileNamePrefix, 'complex', true, 'patchversion', patchVersion );
 
-% Get Study Start Time
-tStudyStr = RCN.Parameter.GetValue('RFR_ECSERIES_DICOM_SERIES_TIME');
-ind = strfind( tStudyStr, '.' );
-hr  = str2double( tStudyStr(1:(ind-5)) );
-min = str2double( tStudyStr((ind-4):(ind-3)) );
-sec = str2double( tStudyStr((ind-2):end) );
-tStudy = 3600*hr + 60*min + sec;
-% Get Series Start Time
-tSeriesStr = RCN.Parameter.GetValue('RFR_SERIES_DICOM_SERIES_TIME');
-ind = strfind( tSeriesStr, '.' );
-hr  = str2double( tSeriesStr(1:(ind-5)) );
-min = str2double( tSeriesStr((ind-4):(ind-3)) );
-sec = str2double( tSeriesStr((ind-2):end) );
-tSeries = 3600*hr + 60*min + sec;
+% NOTE: saving as mag images as well, for validation purposes
+mrecon_writenifti2d( RCN, outputDirPath, strcat( outFilePrefix, '_rlt_mag' ), 'complex', false, 'patchversion', patchVersion );
 
-% Get Slice Duration
-seriesDuration  = RCN.Parameter.GetValue('AC_total_scan_time');
-numSlice        = size( RCN.Data, dim.loca );
-numDynDummy     = RCN.Parameter.GetValue( 'MP_nr_dummy_dynamic_scans' );
-switch patchVersion
-    % NOTE:
-    case 'c51c8c1'
-        % acquition order: dummy, acq_1, dummy, acq_2, ..., dummy, acq_n
-        %                  dummy, trn_1, dummy, trn_2, ..., dummy, trn_n
-        sliceDuration    = seriesDuration / numSlice;
-        sliceStartOffset = numDynDummy * frameDuration;
-    otherwise
-        fprintf( '    Warning: patch version (%s) unspecified or unrecognised; slice timing may be incorrect.', patchVersion )
-        sliceDuration    = seriesDuration / numSlice;
-        sliceStartOffset = numDynDummy * frameDuration;
-end
-
-%{
-% NOTE: datetime isn't available in earlier Matlab versions
-timestr2datetime = @(str) datetime( str, 'InputFormat', 'HHmmss.SSSSS' );
-datetime2seconds = @(t) 360*t.Hour + 60*t.Minute + t.Second;
-tStudy  = datetime2seconds( timestr2datetime( RCN.Parameter.GetValue('RFR_ECSERIES_DICOM_SERIES_TIME') ) );
-tSeries = datetime2seconds( timestr2datetime( RCN.Parameter.GetValue('RFR_SERIES_DICOM_SERIES_TIME') ) );
-%}
-
-% Generate Script to Extract Slices from Stack
-scriptFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_extract_slices.sh' ) );
-fid = fopen( scriptFilePath, 'w' );
-
-fwrite( fid, sprintf( '#!/bin/sh\n\n' ) );
-fwrite( fid, sprintf( '# %-25s %-15s %s\n', 'study start time', '(hhmmss.sss)', tStudyStr ) );
-fwrite( fid, sprintf( '# %-25s %-15s %g\n', 'study start time', '(s)', tStudy ) );
-fwrite( fid, sprintf( '# %-25s %-15s %s\n', 'series start time', '(hhmmss.sss)', tSeriesStr ) );
-fwrite( fid, sprintf( '# %-25s %-15s %g\n', 'series start time', '(s)', tSeries ) );
-fwrite( fid, sprintf( '# %-25s %-15s %g\n', 'series duration', '(s)', seriesDuration ) );
-fwrite( fid, sprintf( '# %-25s %-15s %g\n', 'slice durationn', '(s)', sliceDuration ) );
-fwrite( fid, sprintf( '# %-25s %-15s %g\n', 'dummy delay', '(s)', sliceStartOffset ) );
-fwrite( fid, sprintf( '# %-25s %-15s %g\n', 'frame duration', '(s)', frameDuration ) );
-
-% Process Slice-by-Slice
-for iSlice = 1:numSlice
-
-    fwrite( fid, sprintf( '\n# Slice %i\n\n', iSlice ) );
-    
-    % Extract Slice from M2D Stack
-    rltCpxSliceNiiFileName = sprintf( '%s_rlt_slice%02i_cpx.nii.gz', outFilePrefix, iSlice );
-    cmd = sprintf( 'region %s %s -Rz1 %i -Rz2 %i\n\n', rltCpxNiiFileName, rltCpxSliceNiiFileName, iSlice-1, iSlice );
-    fwrite( fid, cmd );
-    
-    % Set Slice Thickness and Start Time Relative to Start of Study
-    sliceThickness = RCN.Parameter.Scan.RecVoxelSize(3);
-    tSlice = tSeries + (iSlice-1) * sliceDuration + sliceStartOffset - tStudy;
-    cmd = sprintf( 'headertool %s %s -size 0 0 %f -timeOrigin %f\n\n', rltCpxSliceNiiFileName, rltCpxSliceNiiFileName, sliceThickness, tSlice );
-    fwrite( fid, cmd );
-
-end
-
-% Close Script File
-fclose( fid );
-
-% Display Time Elapsed Message
 disp_time_elapsed_msg( toc ),
 
-disp_write_file_msg( rltCpxNiiFilePath )
-
-disp_write_file_msg( scriptFilePath )
+for iLoc = 1:size(RCN.Data,dim.loc)
+   disp_write_file_msg( niiFilePaths{iLoc} )
+end
 
 
 %% End
