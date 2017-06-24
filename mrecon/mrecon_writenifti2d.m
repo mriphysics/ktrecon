@@ -61,7 +61,7 @@ add_param_fn(   p, 'displayrange', default.displayRange, ...
 add_param_fn(   p, 'datascaling', default.dataScaling, ...
     @(x) validateattributes( x, {'numeric'}, {'vector','numel',2}, mfilename) );
 add_param_fn(   p, 'patchversion', default.patchVersion, ...
-    @(x) validateattributes( x, {'char'}, {'vector'}, mfilename) );
+    @(x) validateattributes( x, {'char'}, {}, mfilename) );
 
 parse( p, MR, niiFileDir, niiFileNamePrefix, varargin{:} );
 
@@ -140,19 +140,20 @@ switch patchVersion
         sliceDuration    = seriesDuration / numLoc;
         sliceStartOffset = numDynDummy * frameDuration;
     otherwise
-        fprintf( '    Warning: patch version (%s) unspecified or unrecognised; slice timing may be incorrect.', patchVersion )
+        fprintf( '    Warning: patch version (%s) unspecified or unrecognised; slice timing may be incorrect.  \n', patchVersion )
         sliceDuration    = seriesDuration / numLoc;
         sliceStartOffset = numDynDummy * frameDuration;
 end
 
-fprintf( '    %-25s %-15s %s\n', 'study start time', '(hhmmss.sss)', tStudyStr );
-fprintf( '    %-25s %-15s %g\n', 'study start time', '(s)', tStudy );
-fprintf( '    %-25s %-15s %s\n', 'series start time', '(hhmmss.sss)', tSeriesStr );
-fprintf( '    %-25s %-15s %g\n', 'series start time', '(s)', tSeries );
-fprintf( '    %-25s %-15s %g\n', 'series duration', '(s)', seriesDuration );
-fprintf( '    %-25s %-15s %g\n', 'slice durationn', '(s)', sliceDuration );
-fprintf( '    %-25s %-15s %g\n', 'dummy delay', '(s)', sliceStartOffset );
-fprintf( '    %-25s %-15s %g\n', 'frame duration', '(s)', frameDuration );
+fprintf( '    %-25s %-15s %15.3f\n', 'study start time', '(hhmmss.sss)', str2num( tStudyStr ) );
+fprintf( '    %-25s %-15s %15.3f\n', 'series start time', '(hhmmss.sss)', str2num( tSeriesStr ) );
+fprintf( '    %-25s %-15s %15.3f\n', 'study start time', '(s)', tStudy );
+fprintf( '    %-25s %-15s %15.3f\n', 'series start time', '(s)', tSeries );
+fprintf( '    %-25s %-15s %15.3f\n', 'series time offset', '(s)', tSeries - tStudy );
+fprintf( '    %-25s %-15s %15.3f\n', 'series duration', '(s)', seriesDuration );
+fprintf( '    %-25s %-15s %15.3f\n', 'slice durationn', '(s)', sliceDuration );
+fprintf( '    %-25s %-15s %15.3f\n', 'dummy delay', '(s)', sliceStartOffset );
+fprintf( '    %-25s %-15s %15.3f\n', 'frame duration', '(s)', frameDuration );
 
 
 %% Get Image Information
@@ -160,11 +161,14 @@ fprintf( '    %-25s %-15s %g\n', 'frame duration', '(s)', frameDuration );
 % Compute M2D Image to World Transformation
 A  = mrecon_image_to_nii_world_transform( MR );
 
-% Calculate Scaling (Voxel Size)
-S  = sqrt( sum( A(1:3,1:3).^2, 1 ) );
+% Calculate Scaling of m2d Data (Voxel Size)
+Sm2d  = sqrt( sum( A(1:3,1:3).^2, 1 ) );
 
 % Get Slice Thickness
 sliceThickness = MR.Parameter.Scan.RecVoxelSize(3);
+
+% Scaling of 2d Data (Voxel Size)
+S2d = [ Sm2d(1) Sm2d(2) sliceThickness ];
 
 
 %% Extract 2D+Time Slices from M2D Stack
@@ -174,26 +178,32 @@ niiFilePaths = cell(numLoc,1);
 for iLoc = 1:numLoc
 
     % Full Path of NIfTI File
-    niiFilePaths{iLoc} = fullfile( niiFilDir, sprintf( '%s_loc%02i.nii', niiFileNamePrefix, iLoc ) );
+    niiFilePaths{iLoc} = fullfile( niiFileDir, sprintf( '%s_slice%02i.nii', niiFileNamePrefix, iLoc ) );
 
     % Format Image Data
-    im = single( reshape_mrecon_to_nii( MR.Data(:,:,:,:,:,:,iLoc,:,:,:,:) ) );
+    im = single( reshape_mrecon_to_nii( MR.Data(:,:,:,:,:,:,:,iLoc,:,:,:,:) ) );
     if ~saveComplex
         im = abs( im );
     end
     im = dataScaling(2) * im + dataScaling(1);
 
+    % Slice Time Offset
+    sliceTimeOffset = ( tSeries + (iLoc-1) * sliceDuration + sliceStartOffset - tStudy );  % seconds
+    fprintf( '    %-25s %-15s %15.3f\n', sprintf( 'slice%02i time offset', iLoc ), '(s)', sliceTimeOffset );
+    
     % Calculate Affine Transformation for Slice
-    Ashift2slice = eye(4); 
-    Ashift2slice(3,4) = iLoc-1;
-    Aslice = A * Ashift2slice;
+    Ashift2slice = eye(4); Ashift2slice(3,4) = iLoc-1;
+    Aunscalevox = inv( [Sm2d(1) 0 0 0; 0 Sm2d(2) 0 0; 0 0 Sm2d(3) 0; 0 0 0 1] );
+    Arescalevox = [S2d(1) 0 0 0; 0 S2d(2) 0 0; 0 0 S2d(3) 0; 0 0 0 1];
+    Aslice = A * Arescalevox * Aunscalevox * Ashift2slice;
     
     % Make NIfTI Stucture
-    N = make_nii( im, S );
+    N = make_nii( im, S2d );
 
     % Adjust NIfTI Header Values
     N.hdr.dime.pidxim(4) = sliceThickness;
     N.hdr.dime.pixdim(5) = frameDuration;
+    N.hdr.dime.toffset   = sliceTimeOffset;
     N.hdr.hist.srow_x = Aslice(1,:);
     N.hdr.hist.srow_y = Aslice(2,:);
     N.hdr.hist.srow_z = Aslice(3,:);

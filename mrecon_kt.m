@@ -506,9 +506,10 @@ niiFilePaths = mrecon_writenifti2d( RCN, outputDirPath, niiFileNamePrefix, 'comp
 % NOTE: saving as mag images as well, for validation purposes
 mrecon_writenifti2d( RCN, outputDirPath, strcat( outFilePrefix, '_rlt_mag' ), 'complex', false, 'patchversion', patchVersion );
 
+fprintf( '\n' )
 disp_time_elapsed_msg( toc ),
 
-for iLoc = 1:size(RCN.Data,dim.loc)
+for iLoc = 1:size(RCN.Data,dim.loca)
    disp_write_file_msg( niiFilePaths{iLoc} )
 end
 
