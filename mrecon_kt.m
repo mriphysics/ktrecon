@@ -124,15 +124,16 @@ resetDepPath = onCleanup( @()path(origDepPath) );
 
 codeDirPath = fileparts( which( mfilename ) );
 
+addpath( genpath( fullfile( codeDirPath, 'lib' ) ) )
+addpath( genpath( fullfile( codeDirPath, 'mrecon' ) ) )
+addpath( genpath( fullfile( codeDirPath, 'recon' ) ) )
+addpath( genpath( fullfile( codeDirPath, 'util' ) ) )
+
 if isempty( which( 'MRecon' ) )
     error( 'Require ReconFrame library in Matlab path.' )
 end
 
-if isempty( which( 'make_nii' ) ),
-    addpath( genpath( fullfile( codeDirPath, 'lib' ) ) )
-end
-
-
+    
 %% Anonymous Functions
 
 % Swap dimensions to/from ReconFrame
