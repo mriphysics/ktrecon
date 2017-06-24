@@ -237,7 +237,7 @@ ktAcq   = swap_dim_reconframe_to_xydcl( ACQ.Data );
 ktTrn   = swap_dim_reconframe_to_xydcl( TRN.Data );
 ktNoise = swap_dim_reconframe_to_xydcl( NOISE.Data );
 kspaceMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_kspace.mat' ) );
-save( kspaceMatFilePath, 'ktAcq', 'ktTrn', 'ktNoise' );
+save( kspaceMatFilePath, 'ktAcq', 'ktTrn', 'ktNoise', '-v7.3' );
 clear ktAcq ktTrn ktNoise
 
 disp_time_elapsed_msg( toc )
@@ -457,9 +457,14 @@ for iSlice = 1:numSlice
     % Put Data in Back in MRecon Objects
     RCN.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) = swap_dim_xydcl_to_reconframe( ktRcn );
     DC.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:)  = swap_dim_xydcl_to_reconframe( ktDC );
-
+    
+    % Save Reconstructed Data
+    reconMatFilePath = fullfile( outputDirPath, sprintf( '%s_slice%02i_recon.mat', outFilePrefix, iSlice ) );
+    save( reconMatFilePath, 'ktRcn', 'ktDC', '-v7.3' );
+    
     % Display Time Elapsed Message
     disp_time_elapsed_msg( toc ),
+    disp_write_file_msg( reconMatFilePath ),
     
 end
 
