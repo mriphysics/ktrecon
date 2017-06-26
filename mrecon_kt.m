@@ -30,24 +30,42 @@ function mrecon_kt( rawDataFilePath, varargin )
 
   e.g., 
 
+      ```bash
+      # Mount Raw Data Drive
       sshfs jva13@10.0.1.150:/export/pnraw/raw-ingenia ~/mnt/pnraw01-ingenia
-      
-      cd ~/dev_recon_from_raw
+      # Open Matlab
       matlab -nosplash -nodisplay -nojvm -singleCompThread
         OR
       /usr/local/MATLAB/R2012b/bin/matlab -singleCompThread &
-      
+      ```
+        
+      ```matlab
+      % User-Specified
+      fcmrNo = 168;
+      seriesNos = [22:28,30:34,36:40,42:46,47:50];
+      rawDataDirPath = '/home/jva13/mnt/pnraw01-ingenia/2017_05_18/OF_295686';
+      % Dependencies
+      cd ~/ktrecon  
+      addpath( '~/ktrecon/mrecon' )                         % required for id_pnraw_data
+      addpath( genpath( '~/reconframe/MRecon-3.0.535' ) ),  % required for ReconFrame
+      % Processing
+      outputDirPath  = fullfile( '/scratch/jva13', sprintf( 'fcmr%03i', fcmrNo ) );
+      for seriesNo = seriesNos,
+          idStr = sprintf( 'fcmr%03is%02i', fcmrNo, seriesNo );
+          fprintf( '\n============ %s ============\n\n', idStr )
+          [ rawDataFilePath, coilSurveyFilePath, senseRefFilePath ] = id_pnraw_data( rawDataDirPath, seriesNo );
+          mrecon_kt( rawDataFilePath, 'senseref', senseRefFilePath, 'coilsurvey', coilSurveyFilePath, 'outputdir', outputDirPath, 'outputname', idStr ) 
+      end
+      % Exit Matlab
+      exit
+      ```
+
+      ```bash
+      # Dismount Raw Data Drive
       fusermount -u ~/mnt/pnraw01-ingenia/
+      ```
 
 %}
-
-
-%% TODO
-%
-% - [ ] remove non-steady-state frames
-% - [ ] optional recon baseline and/or sliding window only
-% - [ ] optional save k-space data
-% - [ ] optional save 2D with time offset as magnitude
 
 
 %% Optional Input Argument Default Values
@@ -252,21 +270,13 @@ switch csmCalcMethod
     case 'prescan'
         
         % Sense Reference
-        disp_start_step_msg( 'Loading and preprocessing SENSE reference data' ),
+        disp_start_step_msg( 'Loading SENSE reference data' ),
         SREF = MRecon( senseRefFilePath );
-        %         SREF.Parameter.Parameter2Read.typ = 1;
-        %         SREF.Parameter.Parameter2Read.Update;
-        %         SREF.ReadData;
-        %         mrecon_preprocess( SREF );
         disp_time_elapsed_msg( toc ),
         
         % Coil Survey    
-        disp_start_step_msg( 'Loading and preprocessing coil survey data' ),
+        disp_start_step_msg( 'Loading coil survey data' ),
         COIL = MRecon( coilSurveyFilePath );
-        %         COIL.Parameter.Parameter2Read.typ = 1;
-        %         COIL.Parameter.Parameter2Read.Update;
-        %         COIL.ReadData;
-        %         mrecon_preprocess( COIL );
         disp_time_elapsed_msg( toc ), 
             
         % Target
@@ -290,14 +300,13 @@ switch csmCalcMethod
         SENS.RemoveMOversampling    = 0;
         SENS.OutputSizeSensitivity  = [ size(ACQ.Data,dim.x), size(ACQ.Data,dim.y), size(ACQ.Data,dim.loca) ];
         SENS.OutputSizeReformated   = SENS.OutputSizeSensitivity;
-        
         SENS.Perform;
 
         % Extract data from MRsense object
         csm     = swap_dim_reconframe_to_xydcl( SENS.Sensitivity );             % coil sensitivity maps
         imBody  = swap_dim_reconframe_to_xydcl( SENS.ReformatedBodycoilData );  % body coil image
         imCoil  = swap_dim_reconframe_to_xydcl( SENS.ReformatedCoilData );      % array coil images
-        psiSens = SENS.Psi;                                 % array coil noise covariance
+        psiSens = SENS.Psi;                                                     % array coil noise covariance
         csmMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_csm.mat' ) );
         save( csmMatFilePath, 'csm', 'imBody', 'imCoil', 'psiSens', '-v7.3' );
         
@@ -442,17 +451,10 @@ for iSlice = 1:numSlice
     else
         [ ktRcn, ktDC ] = recon_ktsense( ktAcq, ktTrn, csm, 'noisecov', noiseCov, 'lambda0', ktRegStrength,  'mask', mask, 'lambdaroi', ktRegStrengthROI ); 
     end
-    % TODO: compare recon using noise covariance   
+    % TODO: compare recon using available noise covariance estimates:  
     % 1) estimated from k-t undersampled data, 
     % 2) calculated using noise samples in MRecon object NOISE, and
     % 3) calculated in sensitivity maps MRecon object SENS
-    
-    % Zero-Pad k-t Data to Fit MRecon Object Prior to RemoveOversampling()
-    % FIXME: zero-pad in image space
-    %{
-        ktRcn = padarray( ktRcn, [round((size(RCN.Data,dim.x)-size(ktRcn,1))/2),0,0,0,0,0,0,0,0,0,0,0] );
-        ktDC  = padarray( ktDC,  [round((size(DC.Data,dim.x)-size(ktDC,1))/2),  0,0,0,0,0,0,0,0,0,0,0] );
-    %}
     
     % Put Data in Back in MRecon Objects
     RCN.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) = swap_dim_xydcl_to_reconframe( ktRcn );
