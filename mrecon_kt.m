@@ -219,7 +219,7 @@ fprintf( '\n%s()  started  %s\n\n', mfilename, datestr(now) );
 %% Load Data
 
 % Undersampled Data
-disp_start_step_msg( 'Loading undersampled data' )
+disp_start_step_msg( 'Loading and preprocessing undersampled data' )
 ACQ = MRecon( rawDataFilePath );
 ACQ.Parameter.Parameter2Read.typ = 1;
 ACQ.Parameter.Parameter2Read.mix = 0;
