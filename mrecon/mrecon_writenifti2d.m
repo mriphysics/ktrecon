@@ -175,7 +175,13 @@ S2d = [ Sm2d(1) Sm2d(2) sliceThickness ];
 
 niiFilePaths = cell(numLoc,1);
 
-for iLoc = 1:numLoc
+locOrder = mrecon_locorder( MR ) + 1;  % NOTE: change from zero index to index 1 
+
+fprintf( '    slice order: ' );
+fprintf( '%i, ', locOrder-1 );
+fprintf( '\b\b  \n' );
+
+for iLoc = locOrder(:).'  % NOTE: for loop index values should be row vector
 
     % Full Path of NIfTI File
     niiFilePaths{iLoc} = fullfile( niiFileDir, sprintf( '%s_slice%02i.nii', niiFileNamePrefix, iLoc ) );
