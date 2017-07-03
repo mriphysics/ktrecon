@@ -194,7 +194,7 @@ for iLoc = locOrder(:).'  % NOTE: for loop index values should be row vector
     im = dataScaling(2) * im + dataScaling(1);
 
     % Slice Time Offset
-    sliceTimeOffset = ( tSeries + (iLoc-1) * sliceDuration + sliceStartOffset - tStudy );  % seconds
+    sliceTimeOffset = ( tSeries + double(iLoc-1) * sliceDuration + sliceStartOffset - tStudy );  % seconds
     fprintf( '    %-25s %-15s %15.3f\n', sprintf( 'slice%02i time offset', iLoc ), '(s)', sliceTimeOffset );
     
     % Calculate Affine Transformation for Slice
