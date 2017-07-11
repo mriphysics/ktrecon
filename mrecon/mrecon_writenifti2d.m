@@ -187,7 +187,7 @@ for iLoc = locOrder(:).'  % NOTE: for loop index values should be row vector
     niiFilePaths{iLoc} = fullfile( niiFileDir, sprintf( '%s_slice%02i.nii', niiFileNamePrefix, iLoc ) );
 
     % Format Image Data
-    im = single( reshape_mrecon_to_nii( MR.Data(:,:,:,:,:,:,:,iLoc,:,:,:,:) ) );
+    im = reshape_mrecon_to_nii( MR.Data(:,:,:,:,:,:,:,iLoc,:,:,:,:) );
     if ~saveComplex
         im = abs( im );
     end

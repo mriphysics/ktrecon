@@ -86,7 +86,7 @@ S  = sqrt( sum( A(1:3,1:3).^2, 1 ) );
 
 %% Format Image Data
 
-im = single( reshape_mrecon_to_nii( MR.Data ) );
+im = reshape_mrecon_to_nii( MR.Data );
 if ~saveComplex
     im = abs( im );
 end
