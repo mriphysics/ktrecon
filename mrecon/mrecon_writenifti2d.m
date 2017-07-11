@@ -17,7 +17,7 @@ function niiFilePaths = mrecon_writenifti2d( MR, niiFileDir, niiFileNamePrefix, 
 %
 %   Parameter-Value Options:
 %       frameduration       - duration, in seconds, of one dynamic frame
-%       complex             - save complex-valued images
+%       datatype            - 'magnitude' (default), 'phase', 'real', 'imaginary', or 'complex'
 %       displayrange        - NIfTI header [min,max] values
 %       datascaling         - [interept,slope], 
 %                             i.e., im = slope * MR.Data + intercept
@@ -30,7 +30,7 @@ function niiFilePaths = mrecon_writenifti2d( MR, niiFileDir, niiFileNamePrefix, 
 %% Default Values for Unspecified Input Arguments
 
 default.frameDuration  = [];
-default.saveComplex    = false;
+default.dataType       = 'magnitude';
 default.displayRange   = [];
 default.dataScaling    = [0 1];
 default.patchVersion   = '';
@@ -54,8 +54,8 @@ addRequired(   p, 'niiFileNamePrefix', ...
     @(x) validateattributes( x, {'char'}, {'vector'}, mfilename) );
 add_param_fn(   p, 'frameduration', default.frameDuration, ...
     @(x) validateattributes( x, {'numeric'}, {'positive','real','scalar'}, mfilename) );    
-add_param_fn(   p, 'complex', default.saveComplex, ...
-    @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) );
+add_param_fn(   p, 'datatype', default.dataType, ...
+    @(x) validateattributes( x, {'char'}, {'vector'}, mfilename) );
 add_param_fn(   p, 'displayrange', default.displayRange, ...
     @(x) validateattributes( x, {'numeric'}, {'vector','numel',2}, mfilename) );
 add_param_fn(   p, 'datascaling', default.dataScaling, ...
@@ -66,14 +66,10 @@ add_param_fn(   p, 'patchversion', default.patchVersion, ...
 parse( p, MR, niiFileDir, niiFileNamePrefix, varargin{:} );
 
 frameDuration  = p.Results.frameduration;
-saveComplex    = p.Results.complex;
+dataType       = p.Results.datatype;
 displayRange   = p.Results.displayrange;
 dataScaling    = p.Results.datascaling;
 patchVersion   = p.Results.patchversion;
-
-if saveComplex && isreal( MR.Data )
-    saveComplex = false;
-end
 
 
 %% Anonymous Function
@@ -95,6 +91,21 @@ dim.extr1   = 10;
 dim.extr2   = 11;
 dim.aver    = 12;
 reshape_mrecon_to_nii = @( d ) reshape( permute( d, [ dim.x dim.y dim.loca dim.dyn dim.z dim.chan dim.card dim.echo dim.mix dim.extr1 dim.extr2 dim.aver ] ), size(d,dim.x), size(d,dim.y), size(d,dim.loca), size(d,dim.dyn), [] ); 
+
+switch dataType
+    case 'magnitude'
+        data2im = @(data) abs(data);
+    case 'phase'
+        data2im = @(data) angle(data);
+    case 'real'
+        data2im = @(data) real(data);
+    case 'imaginary'
+        data2im = @(data) imag(data);
+    case 'complex'
+        data2im = @(data) complex(real(data),imag(data));
+    otherwise
+        error( 'dataType ''%s'' not recognised', dataType )
+end
 
 
 %% Calculate Timing from MRecon Object
@@ -187,11 +198,7 @@ for iLoc = locOrder(:).'  % NOTE: for loop index values should be row vector
     niiFilePaths{iLoc} = fullfile( niiFileDir, sprintf( '%s_slice%02i.nii', niiFileNamePrefix, iLoc ) );
 
     % Format Image Data
-    im = reshape_mrecon_to_nii( MR.Data(:,:,:,:,:,:,:,iLoc,:,:,:,:) );
-    if ~saveComplex
-        im = abs( im );
-    end
-    im = dataScaling(2) * im + dataScaling(1);
+    im = dataScaling(2) * data2im( reshape_mrecon_to_nii( MR.Data(:,:,:,:,:,:,:,iLoc,:,:,:,:) ) ) + dataScaling(1);
 
     % Slice Time Offset
     sliceTimeOffset = ( tSeries + double(iLoc-1) * sliceDuration + sliceStartOffset - tStudy );  % seconds

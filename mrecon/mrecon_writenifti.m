@@ -13,7 +13,7 @@ function niiFilePath = mrecon_writenifti( MR, niiFilePath, varargin )
 %
 %   Parameter-Value Options:
 %       frameduration   - duration, in seconds, of one dynamic frame
-%       complex         - save complex-valued images
+%       datatype        - 'magnitude' (default), 'phase', 'real', 'imaginary', or 'complex'
 %       displayrange    - NIfTI header [min,max] values
 %       datascaling     - [interept,slope], i.e., im = slope * MR.Data + intercept
 
@@ -22,7 +22,7 @@ function niiFilePath = mrecon_writenifti( MR, niiFilePath, varargin )
 %% Default Values
 
 default.frameDuration  = 1;
-default.saveComplex    = false;
+default.dataType       = 'magnitude';
 default.displayRange   = [];
 default.dataScaling    = [0 1];
 
@@ -43,8 +43,8 @@ addRequired(   p, 'niiFilePath', ...
     @(x) validateattributes( x, {'char'}, {'vector'}, mfilename) );
 add_param_fn(   p, 'frameduration', default.frameDuration, ...
     @(x) validateattributes( x, {'numeric'}, {'positive','real','scalar'}, mfilename) );    
-add_param_fn(   p, 'complex', default.saveComplex, ...
-    @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) );
+add_param_fn(   p, 'datatype', default.dataType, ...
+    @(x) validateattributes( x, {'char'}, {'vector'}, mfilename) );
 add_param_fn(   p, 'displayrange', default.displayRange, ...
     @(x) validateattributes( x, {'numeric'}, {'vector','numel',2}, mfilename) );
 add_param_fn(   p, 'datascaling', default.dataScaling, ...
@@ -52,21 +52,33 @@ add_param_fn(   p, 'datascaling', default.dataScaling, ...
 
 parse( p, MR, niiFilePath, varargin{:} );
 frameDuration  = p.Results.frameduration;
-saveComplex    = p.Results.complex;
+dataType       = p.Results.datatype;
 displayRange   = p.Results.displayrange;
 dataScaling    = p.Results.datascaling;
-if saveComplex && isreal( MR.Data )
-    saveComplex = false;
-end
 
 
-%% Anonymous Function
+%% Anonymous Functions
 
 reshape_mrecon_to_nii = @( d ) reshape( permute( d, [ 1 2 8 5 3 4 6 7 9 10 11 12 ] ), size(d,1), size(d,2), size(d,8), size(d,5), [] ); 
     % mrecon: x-y-z-chan-dyn-card-echo-loca-mix-extr1-extr2-aver
     %         1-2-3-4----5---6----7----8----9---10----11----12--
     %
     % nii:    x-y-loca-dyn-other
+
+switch dataType
+    case 'magnitude'
+        data2im = @(data) abs(data);
+    case 'phase'
+        data2im = @(data) angle(data);
+    case 'real'
+        data2im = @(data) real(data);
+    case 'imaginary'
+        data2im = @(data) imag(data);
+    case 'complex'
+        data2im = @(data) complex(real(data),imag(data));
+    otherwise
+        error( 'dataType ''%s'' not recognised', dataType )
+end
 
 
 %% Append .nii to FileName
@@ -86,11 +98,7 @@ S  = sqrt( sum( A(1:3,1:3).^2, 1 ) );
 
 %% Format Image Data
 
-im = reshape_mrecon_to_nii( MR.Data );
-if ~saveComplex
-    im = abs( im );
-end
-im = dataScaling(2) * im + dataScaling(1);
+im = dataScaling(2) *data2im( reshape_mrecon_to_nii( MR.Data ) ) + dataScaling(1);
 
 
 %% Write to File

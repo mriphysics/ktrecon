@@ -507,17 +507,21 @@ disp_write_file_msg( dcNiiFilePath )
 disp_start_step_msg( 'Separating m2d' ),
 fprintf( '\n' )
 
-niiFileNamePrefix = strcat( outFilePrefix, '_rlt_cpx' );
-niiFilePaths = mrecon_writenifti2d( RCN, outputDirPath, niiFileNamePrefix, 'complex', true, 'patchversion', patchVersion );
+rltRealNiiFileNamePrefix = strcat( outFilePrefix, '_rlt_re' );
+rltRealNiiFilePaths = mrecon_writenifti2d( RCN, outputDirPath, rltRealNiiFileNamePrefix, 'datatype', 'real', 'patchversion', patchVersion );
+
+rltImagNiiFileNamePrefix = strcat( outFilePrefix, '_rlt_im' );
+rltImagNiiFilePaths = mrecon_writenifti2d( RCN, outputDirPath, rltImagNiiFileNamePrefix, 'datatype', 'imaginary', 'patchversion', patchVersion );
 
 % NOTE: saving as mag images as well, for validation purposes
-mrecon_writenifti2d( RCN, outputDirPath, strcat( outFilePrefix, '_rlt_mag' ), 'complex', false, 'patchversion', patchVersion );
+mrecon_writenifti2d( RCN, outputDirPath, strcat( outFilePrefix, '_rlt_mag' ), 'datatype', 'magnitude', 'patchversion', patchVersion );
 
 fprintf( '\n' )
 disp_time_elapsed_msg( toc ),
 
 for iLoc = 1:size(RCN.Data,dim.loca)
-   disp_write_file_msg( niiFilePaths{iLoc} )
+   disp_write_file_msg( rltRealNiiFilePaths{iLoc} )
+   disp_write_file_msg( rltImagNiiFilePaths{iLoc} )
 end
 
 
