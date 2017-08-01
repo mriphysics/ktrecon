@@ -367,7 +367,7 @@ mrecon_k2i( BLN );
 mrecon_postprocess( BLN );
 
 % Write to NIfTI
-blnNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_mag' ) );
+blnNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_ab' ) );
 blnNiiFilePath = mrecon_writenifti( BLN, blnNiiFilePath );
 
 % Display Time Elapsed Message
@@ -405,7 +405,7 @@ mrecon_postprocess( SLW );
 frameDuration = mrecon_calc_frame_duration( SLW );
 
 % Save as NIfTI
-slwNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_slw_mag' ) );
+slwNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_slw_ab' ) );
 slwNiiFilePath = mrecon_writenifti( SLW, slwNiiFilePath, 'frameduration', frameDuration );
 
 % Display Time Elapsed Message
@@ -487,11 +487,11 @@ mrecon_postprocess( DC );
 frameDuration = mrecon_calc_frame_duration( RCN );
 
 % Save as NIfTI
-rltNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_mag' ) );
+rltNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_ab' ) );
 rltNiiFilePath = mrecon_writenifti( RCN, rltNiiFilePath, 'frameduration', frameDuration );
-priNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_pri_mag' ) );
+priNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_pri_ab' ) );
 priNiiFilePath = mrecon_writenifti( PRI, priNiiFilePath, 'frameduration', frameDuration );
-dcNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_mag' ) );
+dcNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_ab' ) );
 dcNiiFilePath  = mrecon_writenifti( DC, dcNiiFilePath );
 
 % Display Time Elapsed Message
@@ -514,7 +514,7 @@ rltImagNiiFileNamePrefix = strcat( outFilePrefix, '_rlt_im' );
 rltImagNiiFilePaths = mrecon_writenifti2d( RCN, outputDirPath, rltImagNiiFileNamePrefix, 'datatype', 'imaginary', 'patchversion', patchVersion );
 
 % NOTE: saving as mag images as well, for validation purposes
-mrecon_writenifti2d( RCN, outputDirPath, strcat( outFilePrefix, '_rlt_mag' ), 'datatype', 'magnitude', 'patchversion', patchVersion );
+mrecon_writenifti2d( RCN, outputDirPath, strcat( outFilePrefix, '_rlt_ab' ), 'datatype', 'magnitude', 'patchversion', patchVersion );
 
 fprintf( '\n' )
 disp_time_elapsed_msg( toc ),
