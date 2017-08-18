@@ -499,12 +499,26 @@ dcAbNiiFilePath  = mrecon_writenifti( DC, dcAbNiiFilePath );
 dcPhNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_ph' ) );
 dcPhNiiFilePath  = mrecon_writenifti( DC, dcPhNiiFilePath );
 
+% Save as .mat
+xtRcn = RCN.Data;
+rltMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_recon' ) );
+save( rltMatFilePath, 'xtRcn', '-v7.3' );
+xtPri = PRI.Data;
+priMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_pri_recon' ) );
+save( priMatFilePath, 'xtPri', '-v7.3' );
+xtDc = DC.Data;
+dcMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_recon' ) );
+save( dcMatFilePath, 'xtDc', '-v7.3' );
+
 % Display Time Elapsed Message
 disp_time_elapsed_msg( toc ),
 disp_write_file_msg( rltNiiFilePath )
 disp_write_file_msg( priNiiFilePath )
 disp_write_file_msg( dcAbNiiFilePath )
 disp_write_file_msg( dcPhNiiFilePath )
+disp_write_file_msg( rltMatFilePath )
+disp_write_file_msg( priMatFilePath )
+disp_write_file_msg( dcMatFilePath )
 
 
 %% Save as Slices
