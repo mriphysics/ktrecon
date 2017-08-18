@@ -61,7 +61,7 @@ function mrecon_kt( rawDataFilePath, varargin )
       ```
 
       ```bash
-      # Dismount Raw Data Drive
+      #ï¿½Dismount Raw Data Drive
       fusermount -u ~/mnt/pnraw01-ingenia/
       ```
 
@@ -367,12 +367,15 @@ mrecon_k2i( BLN );
 mrecon_postprocess( BLN );
 
 % Write to NIfTI
-blnNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_ab' ) );
-blnNiiFilePath = mrecon_writenifti( BLN, blnNiiFilePath );
+blnAbNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_ab' ) );
+blnAbNiiFilePath = mrecon_writenifti( BLN, blnAbNiiFilePath, 'datatype', 'magnitude' );
+blnPhNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_ph' ) );
+blnPhNiiFilePath = mrecon_writenifti( BLN, blnPhNiiFilePath, 'datatype', 'phase' );
 
 % Display Time Elapsed Message
 disp_time_elapsed_msg( toc )
-disp_write_file_msg( blnNiiFilePath )
+disp_write_file_msg( blnAbNiiFilePath )
+disp_write_file_msg( blnPhNiiFilePath )
 
 
 %% Sliding Window Recon
@@ -491,14 +494,17 @@ rltNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_ab' ) );
 rltNiiFilePath = mrecon_writenifti( RCN, rltNiiFilePath, 'frameduration', frameDuration );
 priNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_pri_ab' ) );
 priNiiFilePath = mrecon_writenifti( PRI, priNiiFilePath, 'frameduration', frameDuration );
-dcNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_ab' ) );
-dcNiiFilePath  = mrecon_writenifti( DC, dcNiiFilePath );
+dcAbNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_ab' ) );
+dcAbNiiFilePath  = mrecon_writenifti( DC, dcAbNiiFilePath );
+dcPhNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_ph' ) );
+dcPhNiiFilePath  = mrecon_writenifti( DC, dcPhNiiFilePath );
 
 % Display Time Elapsed Message
 disp_time_elapsed_msg( toc ),
 disp_write_file_msg( rltNiiFilePath )
 disp_write_file_msg( priNiiFilePath )
-disp_write_file_msg( dcNiiFilePath )
+disp_write_file_msg( dcAbNiiFilePath )
+disp_write_file_msg( dcPhNiiFilePath )
 
 
 %% Save as Slices
