@@ -497,7 +497,7 @@ priNiiFilePath = mrecon_writenifti( PRI, priNiiFilePath, 'frameduration', frameD
 dcAbNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_ab' ) );
 dcAbNiiFilePath  = mrecon_writenifti( DC, dcAbNiiFilePath );
 dcPhNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_ph' ) );
-dcPhNiiFilePath  = mrecon_writenifti( DC, dcPhNiiFilePath );
+dcPhNiiFilePath  = mrecon_writenifti( DC, dcPhNiiFilePath, 'datatype', 'phase' );
 
 % Save as .mat
 xtRcn = RCN.Data;
