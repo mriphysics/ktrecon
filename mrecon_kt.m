@@ -545,6 +545,13 @@ for iLoc = 1:size(RCN.Data,dim.loca)
 end
 
 
+%% Save GVE PDF
+
+gvepdfFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_pdf.gve' ) );
+ACQ.arameter.ExtractPDFFile( gvepdfFilePath );
+disp_write_file_msg( gvepdfFilePath )
+
+
 %% End
 
 fprintf( '\n%s()  finished  %s\n\n', mfilename, datestr(now) );
