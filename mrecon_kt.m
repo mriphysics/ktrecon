@@ -521,30 +521,6 @@ disp_write_file_msg( priMatFilePath )
 disp_write_file_msg( dcMatFilePath )
 
 
-%% Save as Slices
-%  separate m2d stack into 2d+time slices
-
-disp_start_step_msg( 'Separating m2d' ),
-fprintf( '\n' )
-
-rltRealNiiFileNamePrefix = strcat( outFilePrefix, '_rlt_re' );
-rltRealNiiFilePaths = mrecon_writenifti2d( RCN, outputDirPath, rltRealNiiFileNamePrefix, 'datatype', 'real', 'patchversion', patchVersion );
-
-rltImagNiiFileNamePrefix = strcat( outFilePrefix, '_rlt_im' );
-rltImagNiiFilePaths = mrecon_writenifti2d( RCN, outputDirPath, rltImagNiiFileNamePrefix, 'datatype', 'imaginary', 'patchversion', patchVersion );
-
-% NOTE: saving as mag images as well, for validation purposes
-mrecon_writenifti2d( RCN, outputDirPath, strcat( outFilePrefix, '_rlt_ab' ), 'datatype', 'magnitude', 'patchversion', patchVersion );
-
-fprintf( '\n' )
-disp_time_elapsed_msg( toc ),
-
-for iLoc = 1:size(RCN.Data,dim.loca)
-   disp_write_file_msg( rltRealNiiFilePaths{iLoc} )
-   disp_write_file_msg( rltImagNiiFilePaths{iLoc} )
-end
-
-
 %% Save GVE PDF
 
 gvepdfFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_pdf.gve' ) );
