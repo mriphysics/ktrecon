@@ -6,7 +6,7 @@ function mrecon_kt( rawDataFilePath, varargin )
 %   MRECON_KT( ..., 'outputdir', outputDirPath )
 % 
 %   MRECON_KT( ..., 'outptname', outFilePrefix )
-% 
+%
 %   MRECON_KT( ..., 'patchversion', 'PIH1' )
 %
 %   MRECON_KT( ..., 'reconoptionpairs', opts )
@@ -17,7 +17,8 @@ function mrecon_kt( rawDataFilePath, varargin )
 %
 %   MRECON_KT( ..., 'ktregstrengthroi', 0.00014 )
 %   
-%   MRECON_KT( ..., 'mask', mask )        
+%   MRECON_KT( ..., 'mask', mask )
+%
 %   MRECON_KT( ..., 'exportpdf', true )
 %
 %   MRECON_KT( ..., 'exportjson', true )
@@ -52,9 +53,9 @@ function mrecon_kt( rawDataFilePath, varargin )
         
       ```matlab
       % User-Specified
-      fcmrNo = 168;
-      seriesNos = [22:28,30:34,36:40,42:46,47:50];
-      rawDataDirPath = '/home/jva13/mnt/pnraw01-ingenia/2017_05_18/OF_295686';
+      fcmrNo = 191;
+      seriesNos = [16:20];
+      rawDataDirPath = '/home/jva13/mnt/pnraw01-ingenia/2017_08_14/MA_362635/';
       patchVersion = 'PIH1';
       % Dependencies
       cd ~/ktrecon  
@@ -62,19 +63,23 @@ function mrecon_kt( rawDataFilePath, varargin )
       addpath( genpath( '~/reconframe/MRecon-3.0.535' ) ),  % required for ReconFrame
       % Processing
       outputDirPath  = fullfile( '/scratch/jva13', sprintf( 'fcmr%03i', fcmrNo ) );
+      if ~exist(outputDirPath,'dir')
+        mkdir(outputDirPath)
+      end
+      diary( fullfile( outputDirPath, sprintf( 'log_mrecon_kt_%s.txt', datestr(now,'yyyymmdd_HHMMss') ) ) )
       for seriesNo = seriesNos,
           idStr = sprintf( 'fcmr%03is%02i', fcmrNo, seriesNo );
           fprintf( '\n============ %s ============\n\n', idStr )
           [ rawDataFilePath, coilSurveyFilePath, senseRefFilePath ] = id_pnraw_data( rawDataDirPath, seriesNo );
-          mrecon_kt( rawDataFilePath, 'senseref', senseRefFilePath, 'coilsurvey', coilSurveyFilePath, 'outputdir', outputDirPath, 'outputname', idStr ) 
           mrecon_kt( rawDataFilePath, 'senseref', senseRefFilePath, 'coilsurvey', coilSurveyFilePath, 'outputdir', outputDirPath, 'outputname', idStr, 'patchversion', patchVersion ) 
       end
+      diary off
       % Exit Matlab
       exit
       ```
 
       ```bash
-      #�Dismount Raw Data Drive
+      # Dismount Raw Data Drive
       fusermount -u ~/mnt/pnraw01-ingenia/
       ```
 
@@ -91,9 +96,8 @@ default.reconOpts           = {};
 default.isReconKtSense      = true;
 default.ktRegStrength       = 0.0014;
 default.ktRegStrengthROI    = default.ktRegStrength / 100;
-default.mask                = [];
+default.mask                = []; 
 default.patchVersion        = '';
-
 default.isExportPdf         = true;
 default.isExportJson        = true;
 default.isExportGoalc       = true;
@@ -287,17 +291,17 @@ NOISE.Parameter.Parameter2Read.Update;
 NOISE.ReadData;
 mrecon_setreconparam( NOISE, 'optionpairs', reconOpts );
 mrecon_preprocess( NOISE );
+disp_time_elapsed_msg( toc )
 
 % Save Data
+disp_start_step_msg( 'Saving k-space data' )
 ktAcq   = swap_dim_reconframe_to_xydcl( ACQ.Data );
 ktTrn   = swap_dim_reconframe_to_xydcl( TRN.Data );
 ktNoise = swap_dim_reconframe_to_xydcl( NOISE.Data );
 kspaceMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_kspace.mat' ) );
 save( kspaceMatFilePath, 'ktAcq', 'ktTrn', 'ktNoise', '-v7.3' );
 clear ktAcq ktTrn ktNoise
-
 disp_time_elapsed_msg( toc )
-
 disp_write_file_msg( kspaceMatFilePath )
 
 
@@ -361,20 +365,6 @@ end
 % Add Sensitivity Maps to Undersampled and Training Data MRecon Objects
 ACQ.Parameter.Recon.Sensitivities = SENS;
 TRN.Parameter.Recon.Sensitivities = SENS;
-
-
-%% TODO: Drop Non-Steady State Frames
-
-%{
-if isempty( numFrame ),
-    numFrame = size(ktAcq,3);  % e.g., s = squeeze(sum(sum(bsxfun(@times,mask,abs(xtSlw)))));  figure,  plot(s),  grid on,  
-end                            % or,   frameNo = find_steadystate_framenos( permute(abs(xtSlw),[1,2,4,3]), 'showFig' ); 
-                               %       ktFactor = 8; 
-                               %       numFrame = floor(length(frameNo)/ktFactor)*ktFactor;
-
-ktAcq = ktAcq(:,:,(end-numFrame+1):end,:);
-ktTrn = ktTrn(:,:,1:numFrame,:);
-%}
 
 
 %% Baseline Recon
