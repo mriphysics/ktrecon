@@ -9,6 +9,8 @@ function mrecon_kt( rawDataFilePath, varargin )
 % 
 %   MRECON_KT( ..., 'patchversion', 'PIH1' )
 %
+%   MRECON_KT( ..., 'reconoptionpairs', opts )
+%
 %   MRECON_KT( ..., 'ktregstrength', 0.014 )
 %
 %   MRECON_KT( ..., 'ktregstrengthroi', 0.00014 )
@@ -83,6 +85,7 @@ default.senseRefFilePath    = '';
 default.coilSurveyFilePath  = '';
 default.outputDirPath       = pwd;
 default.outFilePrefix       = '';
+default.reconOpts           = {};
 default.ktRegStrength       = 0.0014;
 default.ktRegStrengthROI    = default.ktRegStrength / 100;
 default.mask                = [];
@@ -119,6 +122,9 @@ add_param_fn(   p, 'outputdir', default.outputDirPath, ...
 add_param_fn(   p, 'outputname', default.outFilePrefix, ...
     @(x) validateattributes( x, {'char'}, {'nonempty','vector'}, mfilename) );
 
+add_param_fn(   p, 'reconoptionpairs', default.reconOpts, ...
+    @(x) validateattributes( x, {'cell'}, {}, mfilename) );
+
 add_param_fn(   p, 'ktregstrength', default.ktRegStrength, ...
     @(x) validateattributes( x, {'numeric'}, {'positive','scalar'}, mfilename) );
 
@@ -149,6 +155,7 @@ senseRefFilePath    = p.Results.senseref;
 coilSurveyFilePath  = p.Results.coilsurvey;
 outputDirPath       = p.Results.outputdir;
 outFilePrefix       = p.Results.outputname;
+reconOpts           = p.Results.reconoptionpairs;
 ktRegStrength       = p.Results.ktregstrength;
 ktRegStrengthROI    = p.Results.ktregstrengthroi;
 mask                = p.Results.mask;
@@ -249,7 +256,7 @@ ACQ.Parameter.Parameter2Read.typ = 1;
 ACQ.Parameter.Parameter2Read.mix = 0;
 ACQ.Parameter.Parameter2Read.Update;
 ACQ.ReadData;
-mrecon_setreconparam( ACQ );
+mrecon_setreconparam( ACQ, 'optionpairs', reconOpts );
 mrecon_preprocess( ACQ );
 disp_time_elapsed_msg( toc )
 
@@ -260,7 +267,7 @@ TRN.Parameter.Parameter2Read.typ = 1;
 TRN.Parameter.Parameter2Read.mix = 1;
 TRN.Parameter.Parameter2Read.Update;
 TRN.ReadData;
-mrecon_setreconparam( TRN );
+mrecon_setreconparam( TRN, 'optionpairs', reconOpts );
 mrecon_preprocess( TRN );
 disp_time_elapsed_msg( toc )
 
@@ -271,7 +278,7 @@ NOISE.Parameter.Parameter2Read.typ = 5;
 NOISE.Parameter.Parameter2Read.mix = 0;
 NOISE.Parameter.Parameter2Read.Update;
 NOISE.ReadData;
-mrecon_setreconparam( NOISE );
+mrecon_setreconparam( NOISE, 'optionpairs', reconOpts );
 mrecon_preprocess( NOISE );
 
 % Save Data
