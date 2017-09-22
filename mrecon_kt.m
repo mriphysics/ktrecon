@@ -16,6 +16,7 @@ function mrecon_kt( rawDataFilePath, varargin )
 %
 %   MRECON_KT( ..., 'exportjson', true )
 %
+%   MRECON_KT( ..., 'exportgoalc', true )
 % 
 %   MRECON_KT( ..., 'verbose', true )
 %
@@ -85,6 +86,7 @@ default.patchVersion        = '';
 
 default.isExportPdf         = true;
 default.isExportJson        = true;
+default.isExportGoalc       = true;
 default.isVerbose           = false;
 
 
@@ -131,6 +133,9 @@ add_param_fn(   p, 'exportpdf', default.isExportPdf, ...
 add_param_fn(   p, 'exportjson', default.isExportJson, ...
     @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) );
 
+add_param_fn(   p, 'exportgoalc', default.isExportGoalc, ...
+    @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) );
+
 add_param_fn(   p, 'verbose', default.isVerbose, ...
     @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) );
 
@@ -146,6 +151,7 @@ mask                = p.Results.mask;
 patchVersion        = p.Results.patchversion;
 isExportPdf         = p.Results.exportpdf;
 isExportJson        = p.Results.exportjson;
+isExportGoalc       = p.Results.exportgoalc;
 isVerbose           = p.Results.verbose;
 
 
@@ -571,6 +577,24 @@ if ( isExportJson )
     % Display Time Elapsed Message
     disp_time_elapsed_msg( toc ),
     disp_write_file_msg( jsonFilePath )
+    
+end
+
+
+%% Export GoalC
+
+if ( isExportGoalc )
+    
+    % Display Start Message
+    disp_start_step_msg( 'Exporting GoalC information file' ),
+    
+    % Export GoalC
+    goalcFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_goalc.txt' ) );
+    mrecon_writegoalc2txt( ACQ, goalcFilePath );
+    
+    % Display Time Elapsed Message
+    disp_time_elapsed_msg( toc ),
+    disp_write_file_msg( goalcFilePath )
     
 end
 
