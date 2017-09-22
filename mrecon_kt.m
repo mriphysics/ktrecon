@@ -12,6 +12,8 @@ function mrecon_kt( rawDataFilePath, varargin )
 %   MRECON_KT( ..., 'ktregstrengthroi', 0.00014 )
 %   
 %   MRECON_KT( ..., 'mask', mask )        
+%   MRECON_KT( ..., 'exportpdf', true )
+%
 % 
 %   MRECON_KT( ..., 'verbose', true )
 %
@@ -79,6 +81,7 @@ default.ktRegStrengthROI    = default.ktRegStrength / 100;
 default.mask                = [];
 default.patchVersion        = '';
 
+default.isExportPdf         = true;
 default.isVerbose           = false;
 
 
@@ -119,6 +122,9 @@ add_param_fn(   p, 'mask', default.mask, ...
 add_param_fn(   p, 'patchversion', default.patchVersion, ...
     @(x) validateattributes( x, {'char'}, {'vector'}, mfilename) );
 
+add_param_fn(   p, 'exportpdf', default.isExportPdf, ...
+    @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) );
+
 add_param_fn(   p, 'verbose', default.isVerbose, ...
     @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) );
 
@@ -132,6 +138,7 @@ ktRegStrength       = p.Results.ktregstrength;
 ktRegStrengthROI    = p.Results.ktregstrengthroi;
 mask                = p.Results.mask;
 patchVersion        = p.Results.patchversion;
+isExportPdf         = p.Results.exportpdf;
 isVerbose           = p.Results.verbose;
 
 
@@ -523,9 +530,20 @@ disp_write_file_msg( dcMatFilePath )
 
 %% Save GVE PDF
 
-gvepdfFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_pdf.gve' ) );
-ACQ.arameter.ExtractPDFFile( gvepdfFilePath );
-disp_write_file_msg( gvepdfFilePath )
+if ( isExportPdf )
+    
+    % Display Start Message
+    disp_start_step_msg( 'Generating protocol definition file' ),
+    
+    % Save GVE
+    gvepdfFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_pdf.gve' ) );
+    ACQ.Parameter.ExtractPDFFile( gvepdfFilePath );
+    
+    % Display Time Elapsed Message
+    disp_time_elapsed_msg( toc ),
+    disp_write_file_msg( gvepdfFilePath )
+
+end
 
 
 %% End
