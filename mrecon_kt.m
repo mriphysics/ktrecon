@@ -14,6 +14,8 @@ function mrecon_kt( rawDataFilePath, varargin )
 %   MRECON_KT( ..., 'mask', mask )        
 %   MRECON_KT( ..., 'exportpdf', true )
 %
+%   MRECON_KT( ..., 'exportjson', true )
+%
 % 
 %   MRECON_KT( ..., 'verbose', true )
 %
@@ -82,6 +84,7 @@ default.mask                = [];
 default.patchVersion        = '';
 
 default.isExportPdf         = true;
+default.isExportJson        = true;
 default.isVerbose           = false;
 
 
@@ -125,6 +128,9 @@ add_param_fn(   p, 'patchversion', default.patchVersion, ...
 add_param_fn(   p, 'exportpdf', default.isExportPdf, ...
     @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) );
 
+add_param_fn(   p, 'exportjson', default.isExportJson, ...
+    @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) );
+
 add_param_fn(   p, 'verbose', default.isVerbose, ...
     @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) );
 
@@ -139,6 +145,7 @@ ktRegStrengthROI    = p.Results.ktregstrengthroi;
 mask                = p.Results.mask;
 patchVersion        = p.Results.patchversion;
 isExportPdf         = p.Results.exportpdf;
+isExportJson        = p.Results.exportjson;
 isVerbose           = p.Results.verbose;
 
 
@@ -543,6 +550,28 @@ if ( isExportPdf )
     disp_time_elapsed_msg( toc ),
     disp_write_file_msg( gvepdfFilePath )
 
+end
+
+
+%% Export JSON
+
+if ( isExportJson )
+    
+    % Display Start Message
+    disp_start_step_msg( 'Generating JSON parameter file' ),
+    
+    % Export JSON
+    jsonFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '.json' ) );
+    if ( isReconKtSense )
+        RCN.Parameter.Export2Json( jsonFilePath );
+    else
+        ACQ.Parameter.Export2Json( jsonFilePath );
+    end
+    
+    % Display Time Elapsed Message
+    disp_time_elapsed_msg( toc ),
+    disp_write_file_msg( jsonFilePath )
+    
 end
 
 
