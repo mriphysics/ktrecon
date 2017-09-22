@@ -11,6 +11,8 @@ function mrecon_kt( rawDataFilePath, varargin )
 %
 %   MRECON_KT( ..., 'reconoptionpairs', opts )
 %
+%   MRECON_KT( ..., 'reconktsense', false )
+%
 %   MRECON_KT( ..., 'ktregstrength', 0.014 )
 %
 %   MRECON_KT( ..., 'ktregstrengthroi', 0.00014 )
@@ -86,6 +88,7 @@ default.coilSurveyFilePath  = '';
 default.outputDirPath       = pwd;
 default.outFilePrefix       = '';
 default.reconOpts           = {};
+default.isReconKtSense      = true;
 default.ktRegStrength       = 0.0014;
 default.ktRegStrengthROI    = default.ktRegStrength / 100;
 default.mask                = [];
@@ -125,6 +128,9 @@ add_param_fn(   p, 'outputname', default.outFilePrefix, ...
 add_param_fn(   p, 'reconoptionpairs', default.reconOpts, ...
     @(x) validateattributes( x, {'cell'}, {}, mfilename) );
 
+add_param_fn(   p, 'reconktsense', default.isReconKtSense, ...
+    @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) );
+
 add_param_fn(   p, 'ktregstrength', default.ktRegStrength, ...
     @(x) validateattributes( x, {'numeric'}, {'positive','scalar'}, mfilename) );
 
@@ -156,6 +162,7 @@ coilSurveyFilePath  = p.Results.coilsurvey;
 outputDirPath       = p.Results.outputdir;
 outFilePrefix       = p.Results.outputname;
 reconOpts           = p.Results.reconoptionpairs;
+isReconKtSense      = p.Results.reconktsense;
 ktRegStrength       = p.Results.ktregstrength;
 ktRegStrengthROI    = p.Results.ktregstrengthroi;
 mask                = p.Results.mask;
@@ -460,53 +467,116 @@ disp_write_file_msg( slwNiiFilePath )
 
 %% k-t SENSE Reconstruction
 
-% Display Start Message
-fprintf( 'Performing k-t SENSE reconstruction  \n' ),
-
-% k-t SENSE Reconstruction MRecon Object
-RCN = ACQ.Copy;
-RCN.Data = sum (RCN.Data, dim.chan );
-
-% k-t SENSE Prior MRecon Object
-PRI = TRN.Copy;
-PRI.Parameter.Recon.SENSE = 'Yes';  % CLEAR coil combination
-
-% DC/Baseline MRecon Object
-DC = ACQ.Copy;
-DC.Data = sum( sum( DC.Data, dim.chan ), dim.dyn );
-
-% Process Slice-by-Slice
-numSlice = size( RCN.Data, dim.loca );
-for iSlice = 1:numSlice
+if ( isReconKtSense )
     
     % Display Start Message
-    disp_start_step_msg( sprintf( '    slice %3i', iSlice ) ) 
+    fprintf( 'Performing k-t SENSE reconstruction  \n' ),
     
-    % Get Data from MRecon Objects
-    ktAcq       = swap_dim_reconframe_to_xydcl( ACQ.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
-    ktTrn       = swap_dim_reconframe_to_xydcl( TRN.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
-    csm         = swap_dim_reconframe_to_xydcl( ACQ.Parameter.Recon.Sensitivities.Sensitivity(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
-    noiseCov    = SENS.Psi; 
-        %kNoise      = swap_dim_reconframe_to_xydcl( NOISE.Data(:,:,:,:,:,:,:,iLoc,:,:,:,:) ); 
+    % k-t SENSE Reconstruction MRecon Object
+    RCN = ACQ.Copy;
+    RCN.Data = sum (RCN.Data, dim.chan );
+    
+    % k-t SENSE Prior MRecon Object
+    PRI = TRN.Copy;
+    PRI.Parameter.Recon.SENSE = 'Yes';  % CLEAR coil combination
+    
+    % DC/Baseline MRecon Object
+    DC = ACQ.Copy;
+    DC.Data = sum( sum( DC.Data, dim.chan ), dim.dyn );
+    
+    % Process Slice-by-Slice
+    numSlice = size( RCN.Data, dim.loca );
+    for iSlice = 1:numSlice
         
-    % k-t SENSE Reconstruction
-    if isempty( mask )
-        [ ktRcn, ktDC ] = recon_ktsense( ktAcq, ktTrn, csm, 'noisecov', noiseCov, 'lambda0', ktRegStrength );
-    else
-        [ ktRcn, ktDC ] = recon_ktsense( ktAcq, ktTrn, csm, 'noisecov', noiseCov, 'lambda0', ktRegStrength,  'mask', mask, 'lambdaroi', ktRegStrengthROI ); 
+        % Display Start Message
+        disp_start_step_msg( sprintf( '  slice %3i', iSlice ) )
+        
+        % Get Data from MRecon Objects
+        ktAcq       = swap_dim_reconframe_to_xydcl( ACQ.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
+        ktTrn       = swap_dim_reconframe_to_xydcl( TRN.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
+        csm         = swap_dim_reconframe_to_xydcl( ACQ.Parameter.Recon.Sensitivities.Sensitivity(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
+        noiseCov    = SENS.Psi;
+        
+        % k-t SENSE Reconstruction
+        if isempty( mask )
+            [ ktRcn, ktDc ] = recon_ktsense( ktAcq, ktTrn, csm, 'noisecov', noiseCov, 'lambda0', ktRegStrength );
+        else
+            [ ktRcn, ktDc ] = recon_ktsense( ktAcq, ktTrn, csm, 'noisecov', noiseCov, 'lambda0', ktRegStrength,  'mask', mask(:,:,iSlice), 'lambdaroi', ktRegStrengthROI );
+        end
+        % TODO: compare recon using available noise covariance estimates:
+        %   1) estimated from k-t undersampled data,
+        %   2) calculated using noise samples in MRecon object NOISE, and
+        %   3) calculated in sensitivity maps MRecon object SENS
+        
+        % Put Data in Back in MRecon Objects
+        RCN.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) = swap_dim_xydcl_to_reconframe( ktRcn );
+        DC.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:)  = swap_dim_xydcl_to_reconframe( ktDc );
+        
+        % Save Reconstructed Data
+        reconMatFilePath = fullfile( outputDirPath, sprintf( '%s_slice%02i_recon.mat', outFilePrefix, iSlice ) );
+        save( reconMatFilePath, 'ktRcn', 'ktDc', '-v7.3' );
+        clear ktRcn ktDc
+        
+        % Display Time Elapsed Message
+        disp_time_elapsed_msg( toc ),
+        disp_write_file_msg( reconMatFilePath ),
+        
     end
-    % TODO: compare recon using available noise covariance estimates:  
-    % 1) estimated from k-t undersampled data, 
-    % 2) calculated using noise samples in MRecon object NOISE, and
-    % 3) calculated in sensitivity maps MRecon object SENS
     
-    % Put Data in Back in MRecon Objects
-    RCN.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) = swap_dim_xydcl_to_reconframe( ktRcn );
-    DC.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:)  = swap_dim_xydcl_to_reconframe( ktDC );
+    % Display Start Message
+    disp_start_step_msg( 'Finalising k-t SENSE reconstruction' ),
     
-    % Save Reconstructed Data
-    reconMatFilePath = fullfile( outputDirPath, sprintf( '%s_slice%02i_recon.mat', outFilePrefix, iSlice ) );
-    save( reconMatFilePath, 'ktRcn', 'ktDC', '-v7.3' );
+    % Recon Images
+    mrecon_k2i( RCN )
+    mrecon_k2i( PRI )
+    mrecon_k2i( DC )
+    
+    % Postprocessing
+    mrecon_postprocess( RCN );
+    mrecon_postprocess( PRI );
+    mrecon_postprocess( DC );
+    
+    % Get Timing
+    frameDuration = mrecon_calc_frame_duration( RCN );
+    
+    % Write Real-Time as NIfTI
+    rltAbNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_ab' ) );
+    rltAbNiiFilePath = mrecon_writenifti( RCN, rltAbNiiFilePath, 'frameduration', frameDuration, 'datatype', 'magnitude' );
+    rltReNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_re' ) );
+    rltReNiiFilePath = mrecon_writenifti( RCN, rltReNiiFilePath, 'frameduration', frameDuration, 'datatype', 'real' );
+    rltImNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_im' ) );
+    rltImNiiFilePath = mrecon_writenifti( RCN, rltImNiiFilePath, 'frameduration', frameDuration, 'datatype', 'imaginary' );
+    
+    % Write Training as NIfTI
+    priAbNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_trn_ab' ) );
+    priAbNiiFilePath = mrecon_writenifti( PRI, priAbNiiFilePath, 'frameduration', frameDuration, 'datatype', 'magnitude' );
+    priReNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_trn_re' ) );
+    priReNiiFilePath = mrecon_writenifti( PRI, priReNiiFilePath, 'frameduration', frameDuration, 'datatype', 'real' );
+    priImNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_trn_im' ) );
+    priImNiiFilePath = mrecon_writenifti( PRI, priImNiiFilePath, 'frameduration', frameDuration, 'datatype', 'imaginary' );
+    
+    % Write DC as NIfTI
+    dcAbNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_ab' ) );
+    dcAbNiiFilePath  = mrecon_writenifti( DC, dcAbNiiFilePath, 'datatype', 'magnitude' );
+    dcReNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_re' ) );
+    dcReNiiFilePath  = mrecon_writenifti( DC, dcReNiiFilePath, 'datatype', 'real' );
+    dcImNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_im' ) );
+    dcImNiiFilePath  = mrecon_writenifti( DC, dcImNiiFilePath, 'datatype', 'imaginary' );
+    
+    % Save as .mat
+    xtRcn = RCN.Data;
+    rltMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_recon.mat' ) );
+    save( rltMatFilePath, 'xtRcn', '-v7.3' );
+    clear xtRcn
+    xtPri = PRI.Data;
+    priMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_pri_recon.mat' ) );
+    save( priMatFilePath, 'xtPri', '-v7.3' );
+    clear xtPri
+    xtDc = DC.Data;
+    dcMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_recon.mat' ) );
+    save( dcMatFilePath, 'xtDc', '-v7.3' );
+    clear xtDc
+    
     % Save Parameters
     PARAM = mrecon_getparameters( RCN );
     PARAM.Timing = mrecon_getslicetiming( RCN, 'patchversion', patchVersion );
@@ -515,56 +585,25 @@ for iSlice = 1:numSlice
     
     % Display Time Elapsed Message
     disp_time_elapsed_msg( toc ),
-    disp_write_file_msg( reconMatFilePath ),
+    disp_write_file_msg( rltAbNiiFilePath )
+    disp_write_file_msg( rltReNiiFilePath )
+    disp_write_file_msg( rltImNiiFilePath )
+    disp_write_file_msg( rltParamMatFilePath )
+    disp_write_file_msg( rltMatFilePath )
+    disp_write_file_msg( priAbNiiFilePath )
+    disp_write_file_msg( priReNiiFilePath )
+    disp_write_file_msg( priImNiiFilePath )
+    disp_write_file_msg( priMatFilePath )
+    disp_write_file_msg( dcAbNiiFilePath )
+    disp_write_file_msg( dcReNiiFilePath )
+    disp_write_file_msg( dcImNiiFilePath )
+    disp_write_file_msg( dcMatFilePath )
+    
+else
+    
+    fprintf( 'Skipping k-t SENSE reconstruction  \n' ),
     
 end
-
-% Display Start Message
-disp_start_step_msg( 'Finalising k-t SENSE reconstruction' ),
-
-% Recon Images
-mrecon_k2i( RCN )
-mrecon_k2i( PRI )
-mrecon_k2i( DC )
-
-% Postprocessing
-mrecon_postprocess( RCN );
-mrecon_postprocess( PRI );
-mrecon_postprocess( DC );
-
-% Get Timing
-frameDuration = mrecon_calc_frame_duration( RCN );
-
-% Save as NIfTI
-rltNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_ab' ) );
-rltNiiFilePath = mrecon_writenifti( RCN, rltNiiFilePath, 'frameduration', frameDuration );
-priNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_pri_ab' ) );
-priNiiFilePath = mrecon_writenifti( PRI, priNiiFilePath, 'frameduration', frameDuration );
-dcAbNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_ab' ) );
-dcAbNiiFilePath  = mrecon_writenifti( DC, dcAbNiiFilePath );
-dcPhNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_ph' ) );
-dcPhNiiFilePath  = mrecon_writenifti( DC, dcPhNiiFilePath, 'datatype', 'phase' );
-
-% Save as .mat
-xtRcn = RCN.Data;
-rltMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_recon' ) );
-save( rltMatFilePath, 'xtRcn', '-v7.3' );
-xtPri = PRI.Data;
-priMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_pri_recon' ) );
-save( priMatFilePath, 'xtPri', '-v7.3' );
-xtDc = DC.Data;
-dcMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_recon' ) );
-save( dcMatFilePath, 'xtDc', '-v7.3' );
-
-% Display Time Elapsed Message
-disp_time_elapsed_msg( toc ),
-disp_write_file_msg( rltNiiFilePath )
-disp_write_file_msg( priNiiFilePath )
-disp_write_file_msg( dcAbNiiFilePath )
-disp_write_file_msg( dcPhNiiFilePath )
-disp_write_file_msg( rltMatFilePath )
-disp_write_file_msg( priMatFilePath )
-disp_write_file_msg( dcMatFilePath )
 
 
 %% Save GVE PDF
