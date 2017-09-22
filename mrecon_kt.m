@@ -400,13 +400,23 @@ mrecon_postprocess( BLN );
 % Write to NIfTI
 blnAbNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_ab' ) );
 blnAbNiiFilePath = mrecon_writenifti( BLN, blnAbNiiFilePath, 'datatype', 'magnitude' );
-blnPhNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_ph' ) );
-blnPhNiiFilePath = mrecon_writenifti( BLN, blnPhNiiFilePath, 'datatype', 'phase' );
+blnReNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_re' ) );
+blnReNiiFilePath = mrecon_writenifti( BLN, blnReNiiFilePath, 'datatype', 'real' );
+blnImNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_im' ) );
+blnImNiiFilePath = mrecon_writenifti( BLN, blnImNiiFilePath, 'datatype', 'imaginary' );
+
+% Save as .mat
+xtBln = BLN.Data;
+blnMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_recon.mat' ) );
+save( blnMatFilePath, 'xtBln', '-v7.3' );
+clear xtBln 
 
 % Display Time Elapsed Message
 disp_time_elapsed_msg( toc )
 disp_write_file_msg( blnAbNiiFilePath )
-disp_write_file_msg( blnPhNiiFilePath )
+disp_write_file_msg( blnReNiiFilePath )
+disp_write_file_msg( blnImNiiFilePath )
+disp_write_file_msg( blnMatFilePath )
 
 
 %% Sliding Window Recon
