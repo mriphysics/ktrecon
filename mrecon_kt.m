@@ -7,6 +7,8 @@ function mrecon_kt( rawDataFilePath, varargin )
 % 
 %   MRECON_KT( ..., 'outptname', outFilePrefix )
 % 
+%   MRECON_KT( ..., 'patchversion', 'PIH1' )
+%
 %   MRECON_KT( ..., 'ktregstrength', 0.014 )
 %
 %   MRECON_KT( ..., 'ktregstrengthroi', 0.00014 )
@@ -49,6 +51,7 @@ function mrecon_kt( rawDataFilePath, varargin )
       fcmrNo = 168;
       seriesNos = [22:28,30:34,36:40,42:46,47:50];
       rawDataDirPath = '/home/jva13/mnt/pnraw01-ingenia/2017_05_18/OF_295686';
+      patchVersion = 'PIH1';
       % Dependencies
       cd ~/ktrecon  
       addpath( '~/ktrecon/mrecon' )                         % required for id_pnraw_data
@@ -60,6 +63,7 @@ function mrecon_kt( rawDataFilePath, varargin )
           fprintf( '\n============ %s ============\n\n', idStr )
           [ rawDataFilePath, coilSurveyFilePath, senseRefFilePath ] = id_pnraw_data( rawDataDirPath, seriesNo );
           mrecon_kt( rawDataFilePath, 'senseref', senseRefFilePath, 'coilsurvey', coilSurveyFilePath, 'outputdir', outputDirPath, 'outputname', idStr ) 
+          mrecon_kt( rawDataFilePath, 'senseref', senseRefFilePath, 'coilsurvey', coilSurveyFilePath, 'outputdir', outputDirPath, 'outputname', idStr, 'patchversion', patchVersion ) 
       end
       % Exit Matlab
       exit
@@ -486,6 +490,11 @@ for iSlice = 1:numSlice
     % Save Reconstructed Data
     reconMatFilePath = fullfile( outputDirPath, sprintf( '%s_slice%02i_recon.mat', outFilePrefix, iSlice ) );
     save( reconMatFilePath, 'ktRcn', 'ktDC', '-v7.3' );
+    % Save Parameters
+    PARAM = mrecon_getparameters( RCN );
+    PARAM.Timing = mrecon_getslicetiming( RCN, 'patchversion', patchVersion );
+    rltParamMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_parameters.mat' ) );
+    save( rltParamMatFilePath, 'PARAM', '-v7.3' );
     
     % Display Time Elapsed Message
     disp_time_elapsed_msg( toc ),
