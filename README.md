@@ -1,6 +1,6 @@
 # ktrecon
 
-Reconstruct dynamic k-t under-sampled MR data using ReconFrame.
+Reconstruct dynamic k-t under-sampled MR data using [ReconFrame](https://www.gyrotools.com/gt/index.php/products/reconframe).
 
 
 ## directories
@@ -15,9 +15,8 @@ Reconstruct dynamic k-t under-sampled MR data using ReconFrame.
 
 ```matlab
 % User-Specified
-fcmrNo = 191;
 seriesNos = [16:20];
-rawDataDirPath = '/home/jva13/mnt/pnraw01-ingenia/2017_08_14/MA_362635/';
+rawDataDirPath = '/path/to/raw/data/';
 patchVersion = 'PIH1';
 
 % Dependencies
@@ -26,13 +25,13 @@ addpath( '~/ktrecon/mrecon' )                         % required for id_pnraw_da
 addpath( genpath( '~/reconframe/MRecon-3.0.535' ) ),  % required for ReconFrame
 
 % Processing
-outputDirPath  = fullfile( '/scratch/jva13', sprintf( 'fcmr%03i', fcmrNo ) );
+outputDirPath  = '/path/for/output';
 if ~exist(outputDirPath,'dir')
     mkdir(outputDirPath)
 end
 diary( fullfile( outputDirPath, sprintf( 'log_mrecon_kt_%s.txt', datestr(now,'yyyymmdd_HHMMss') ) ) )
 for seriesNo = seriesNos,
-    idStr = sprintf( 'fcmr%03is%02i', fcmrNo, seriesNo );
+    idStr = sprintf( 's%02i', seriesNo );
     fprintf( '\n============ %s ============\n\n', idStr )
     [ rawDataFilePath, coilSurveyFilePath, senseRefFilePath ] = id_pnraw_data( rawDataDirPath, seriesNo );
     mrecon_kt( rawDataFilePath, 'senseref', senseRefFilePath, 'coilsurvey', coilSurveyFilePath, 'outputdir', outputDirPath, 'outputname', idStr, 'patchversion', patchVersion ) 
