@@ -5,11 +5,7 @@ function [ rawDataFilePath, coilSurveyFilePath, senseRefFilePath ] = id_pnraw_da
 % 
 %   rawDataDir - path to directory containing raw data for exam on pnraw01
 %   seriesNo   - series number of acquisition of interest
-% 
-%   Example: 
-%       rawDataDir  = '/home/jva13/mnt/pnraw01-archive/archive-ingenia/2015_10_27/BI_97800/';
-%       seriesNo    = 28; 
-%       [ r, c, s ] = ID_PNRAW_DATA( rawDataDir, seriesNo );
+%
 
 % jfpva (joshua.vanamerom@kcl.ac.uk)
 
