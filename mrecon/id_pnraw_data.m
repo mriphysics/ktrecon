@@ -35,8 +35,13 @@ D = dir( fullfile( rawDataDir, '*.lab' ) );
 for iD = 1:numel(D),
     
     C = strsplit( D(iD).name, '_' );
-    D(iD).seriesNo   = str2double( C{4} );
-    D(iD).seriesDesc = C{6}(1:(end-4));
+    try
+        D(iD).seriesNo   = str2double( C{4} );
+        D(iD).seriesDesc = C{6}(1:(end-4));
+    catch
+        D(iD).seriesNo   = NaN;
+        D(iD).seriesDesc = '';        
+    end
     
     if D(iD).seriesNo ~= 1000,
         D(iD).isCoilSurvey = false;
