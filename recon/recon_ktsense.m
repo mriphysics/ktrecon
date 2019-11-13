@@ -1,4 +1,4 @@
-function [ ktRcn, ktBln, noiseCov ] = recon_ktsense( ktAcq, ktTrn, csm, varargin )
+function [ ktRcn, ktBln, noiseCov, xfTrn, xfMask, xfPri, xtTrn, xtTrnCus ] = recon_ktsense( ktAcq, ktTrn, csm, varargin )
 %RECON_KTSENSE   k-t SENSE reconstruction of 2D dynamic MRI data
 %
 %   ktRcn = RECON_KTSENSE( ktAcq, ktTrn, csm )
@@ -53,6 +53,9 @@ default.mask                = false( nX, nY );
 default.noiseCov            = [];
 default.kNoise              = [];
 default.removeoversampling  = false;
+default.xtTrnCus            = []; % TAR
+default.makeHarmonicFilter  = false; % TAR
+default.frameDuration       = []; %TAR
 default.fn_rmv_os           = @( x ) x((round(size(x,dimX)/4)+1):(size(x,dimX)-round(size(x,dimX)/4)),:,:,:);
 default.isVerbose           = false;
 
@@ -97,6 +100,18 @@ add_param_fn( p, 'removeoversampling', default.removeoversampling, ...
         @(x) validateattributes( x, {'logical'}, ...
         {'scalar'}, mfilename ) );
 
+add_param_fn(  p, 'xtTrnCus', default.xtTrnCus, ...
+        @(x) validateattributes( x, {'numeric'}, ...
+        {'size',[nX,nY,nT]}, mfilename ) );
+    
+add_param_fn( p, 'makeHarmonicFilter', default.makeHarmonicFilter, ...
+        @(x) validateattributes( x, {'logical'}, ...
+        {'scalar'}, mfilename ) );
+    
+add_param_fn(  p, 'frameDuration', default.frameDuration, ...
+        @(x) validateattributes( x, {'numeric'}, ...
+        {'positive'}, mfilename ) );
+    
 add_param_fn( p, 'fn_rmv_os', default.fn_rmv_os, ...
         @(x) validateattributes( x, {'function_handle'}, ...
         {}, mfilename ) );
@@ -113,15 +128,18 @@ mask                = p.Results.mask;
 noiseCov            = p.Results.noisecov;
 kNoise              = p.Results.knoise;
 isRmvOversampling   = p.Results.removeoversampling;
+xtTrnCus            = p.Results.xtTrnCus;
+makeHarmonicFilter  = p.Results.makeHarmonicFilter;
+frameDuration       = p.Results.frameDuration;
 fn_rmv_os           = p.Results.fn_rmv_os;
 isVerbose           = p.Results.verbose;
 
-assert( ~isreal( ktAcq ), 'ktAcq not comple-valued' )
-assert( ~isreal( ktTrn ), 'ktTrn not comple-valued' )
-assert( ~isreal( csm ), 'csm not comple-valued' )
+assert( ~isreal( ktAcq ), 'ktAcq not complex-valued' )
+assert( ~isreal( ktTrn ), 'ktTrn not complex-valued' )
+assert( ~isreal( csm )  ,   'csm not complex-valued' )
 
 if ~isempty( kNoise )
-    assert( ~isreal( kNoise ), 'kNoise not comple-valued'  )
+    assert( ~isreal( kNoise ), 'kNoise not complex-valued'  )
 end
 
 
@@ -185,6 +203,7 @@ noiseCov = cov( noiseData );
 %% Remove Oversampling
 
 if ( isRmvOversampling )
+    csm   = fn_rmv_os( csm ); % TAR
     xtTrn = fn_rmv_os( xtTrn );
     xtBln = fn_rmv_os( xtBln );
     xtDff = fn_rmv_os( xtDff );
@@ -194,13 +213,49 @@ if ( isRmvOversampling )
 end
 
 
+%% Use Custom Training Data for Reconstruction
+
+if ~isempty( xtTrnCus )
+
+    % Scale xtTrnCus to match original xtTrn
+    xtTrnScaleFactor = mean(abs(xtTrn(:))) ./ mean(abs(xtTrnCus(:)));
+    
+    xtTrnCus = xtTrnCus .* xtTrnScaleFactor;
+    if ( isRmvOversampling )
+        xtTrnCus = fn_rmv_os( xtTrnCus );
+    end
+end
+
+
 %% k-t SENSE Reconstruction
 
 safetyMargin    = 1/sqrt(lambda0);
 alpha           = lambda0 / lambdaROI;
 
-[ xtRcn, xtBln ] = recon_xtsense( xtDff, xtSmp, xtTrn, csm, noiseCov, 'xtBln', xtBln, 'safetyMargin', safetyMargin, 'mask', mask, 'alpha', alpha, 'verbose', isVerbose );
-    % [ xtRcn, safetyMargin, xfFlt, unmix, xfRlt, xfBln, xfAcq, xfTrn, xfMask, psi, csm, mask, dtRlt, alpha ] = recon_xtsense( xtDff, xtSmp, xtTrn, csm, noiseCov, 'xtBln', xtBln, 'safetyMargin', safetyMargin, 'mask', mask, 'alpha', alpha, 'dt', dtRlt, 'verbose', true );
+% Reconstruction with Different Regularization Methods
+if ~any( mask(:) )  % if no mask
+    
+    % Uniform Regularization    
+    [ xtRcn, xtBln, ~, ~, ~, xfRcn, ~, ~, xfTrn, xfMask, ~, ~, ~, ~, ~, xfPri ] = recon_xtsense( xtDff, xtSmp, xtTrn, csm, noiseCov, 'xtBln', xtBln, 'safetyMargin', safetyMargin, 'mask', mask, 'alpha', alpha, 'verbose', isVerbose );    
+    
+end
+    
+if any( mask(:) ) % if any part of mask true
+    
+    % Adaptive / Harmonic Regularization
+    makeAdaptiveFilter = true;
+        
+    % with Standard Training Data
+    if isempty( xtTrnCus )
+        [ xtRcn, xtBln, ~, ~, ~, xfRcn, ~, ~, xfTrn, xfMask, ~, ~, ~, ~, ~, xfPri ] = recon_xtsense( xtDff, xtSmp, xtTrn, csm, noiseCov, 'xtBln', xtBln, 'safetyMargin', safetyMargin, 'mask', mask, 'alpha', alpha, 'makeAdaptiveFilter', makeAdaptiveFilter, 'makeHarmonicFilter', makeHarmonicFilter, 'frameDuration', frameDuration, 'verbose', true );
+    end
+    
+    % with Custom Training Data
+    if ~isempty( xtTrnCus )
+        [ xtRcn, xtBln, ~, ~, ~, xfRcn, ~, ~, xfTrn, xfMask, ~, ~, ~, ~, ~, xfPri ] = recon_xtsense( xtDff, xtSmp, xtTrnCus, csm, noiseCov, 'xtBln', xtBln, 'safetyMargin', safetyMargin, 'mask', mask, 'alpha', alpha, 'makeAdaptiveFilter', makeAdaptiveFilter, 'makeHarmonicFilter', makeHarmonicFilter, 'frameDuration', frameDuration, 'verbose', true );
+    end
+    
+end
 
 
 %% Transform to k-t Space

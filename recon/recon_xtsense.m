@@ -1,4 +1,4 @@
-function [ xtRlt, xtBln, safetyMargin, xfFlt, unmix, xfRlt, xfBln, xfAcq, xfTrn, xfMask, psi, csm, mask, dt, alpha ] = recon_xtsense( xtAcq, xtSmp, xtTrn, csm, psi, varargin )
+function [ xtRlt, xtBln, safetyMargin, xfFlt, unmix, xfRlt, xfBln, xfAcq, xfTrn, xfMask, psi, csm, mask, dt, alpha, xfPri ] = recon_xtsense( xtAcq, xtSmp, xtTrn, csm, psi, varargin )
 %RECON_XTSENSE  k-t SENSE dynamic MRI reconstruction from x-t data
 % 
 %   [ xtRcn, xtBln ] = RECON_XTSENSE( xtAcq, xtSmp, xtTrn, csm, psi )
@@ -54,6 +54,13 @@ default.xfMaskKernelWidth = 1;
 
 default.xToRecon     = 1:nX;
 default.makeAdaptiveFilter = false;
+
+% TAR: Harmonics Mask Parameters
+default.makeHarmonicFilter = false;
+default.ktFactor     = 8;
+default.hPadding     = 1;
+default.hrRange      = [105, 180];
+default.frameDuration = [];
 
 default.isVerbose    = false;
 
@@ -119,6 +126,26 @@ add_param_fn( p, 'xToRecon', default.xToRecon, ...
 add_param_fn( p, 'makeAdaptiveFilter', default.makeAdaptiveFilter, ...
         @(x) validateattributes( x, {'logical'}, ...
         {}, mfilename ) );
+
+add_param_fn( p, 'makeHarmonicFilter', default.makeHarmonicFilter, ...
+        @(x) validateattributes( x, {'logical'}, ...
+        {}, mfilename ) );
+    
+add_param_fn(  p, 'ktFactor', default.ktFactor, ...
+        @(x) validateattributes( x, {'numeric'}, ...
+        {'scalar','nonnegative'}, mfilename ) );
+    
+add_param_fn(  p, 'hPadding', default.hPadding, ...
+        @(x) validateattributes( x, {'numeric'}, ...
+        {'scalar','nonnegative'}, mfilename ) );
+    
+add_param_fn(  p, 'hrRange', default.hrRange, ...
+        @(x) validateattributes( x, {'numeric'}, ...
+        {'size',[1 2]}, mfilename) );
+    
+add_param_fn(  p, 'frameDuration', default.frameDuration, ...
+        @(x) validateattributes( x, {'numeric'}, ...
+        {'positive'}, mfilename ) );
     
 add_param_fn( p, 'verbose',     default.isVerbose, ...
         @(x) validateattributes( x, {'logical'}, ...
@@ -138,6 +165,12 @@ xfMaskKernelWidth = p.Results.xfMaskKernelWidth;
 
 xToRecon     = p.Results.xToRecon;
 makeAdaptiveFilter = p.Results.makeAdaptiveFilter;
+
+makeHarmonicFilter = p.Results.makeHarmonicFilter;
+ktFactor     = p.Results.ktFactor;
+hPadding     = p.Results.hPadding;
+hrRange      = p.Results.hrRange;
+frameDuration = p.Results.frameDuration;
 
 isVerbose    = p.Results.verbose;
 
@@ -228,7 +261,7 @@ end
 %% Create x-f Estimate
 
 xfPri = xfTrn;
-
+    
 % Remove DC if Baseline Provided
 
 if any( xfBln(:) )  
@@ -239,34 +272,217 @@ end
 
 xfMask = ones( nX, nY, nF );
 
-if any( mask(:) )  % only if any part of mask is true
-  
-    xfMask = beta * xfMask;
+if ~( makeHarmonicFilter )
 
-    % NOTE: not setting low frequecies in xfMask to 1
-    % xfMask(:,:,iLoFreq) = 1;
+    % Adaptive Filter Mask
+    if any( mask(:) )  % only if any part of mask is true
 
-    xfMask( repmat( mask, [1,1,nF] ) ) = alpha;
-            
-    % Smooth Transition from mask to background
-    
-    if ( any( xfMaskKernelWidth > 1 ) )
-    
-        xfKernelX = gausswin( xfMaskKernelWidth(dimX) );  % TODO: compare to Tsao2003 frequency (Hanning) filter, e.g., xfKernel1D = hann( xfMaskKernelWidth )
-        xfKernelY = gausswin( xfMaskKernelWidth(dimY) ); 
-        xfKernelF = gausswin( xfMaskKernelWidth(dimF) ); 
-        
-        xfKernel = bsxfun( @times, xfKernelX * xfKernelY.', reshape( xfKernelF, 1,1,[] ) );
-        xfKernelNorm = xfKernel / sum( xfKernel( : ) );
-        xfMask = convn( padarray( xfMask, floor(xfMaskKernelWidth/2), 'replicate' ), xfKernelNorm, 'valid' );
-    
+        xfMask = beta * xfMask;
+
+        % NOTE: not setting low frequecies in xfMask to 1
+        % xfMask(:,:,iLoFreq) = 1;
+
+        xfMask( repmat( mask, [1,1,nF] ) ) = alpha;
+
+        % Smooth Transition from mask to background
+
+        if ( any( xfMaskKernelWidth > 1 ) )
+
+            xfKernelX = gausswin( xfMaskKernelWidth(dimX) );  % TODO: compare to Tsao2003 frequency (Hanning) filter, e.g., xfKernel1D = hann( xfMaskKernelWidth )
+            xfKernelY = gausswin( xfMaskKernelWidth(dimY) ); 
+            xfKernelF = gausswin( xfMaskKernelWidth(dimF) ); 
+
+            xfKernel = bsxfun( @times, xfKernelX * xfKernelY.', reshape( xfKernelF, 1,1,[] ) );
+            xfKernelNorm = xfKernel / sum( xfKernel( : ) );
+            xfMask = convn( padarray( xfMask, floor(xfMaskKernelWidth/2), 'replicate' ), xfKernelNorm, 'valid' );
+
+        end
+
     end
     
+    % Apply x-f Mask to x-f Estimate
+
+    xfPri = bsxfun( @times, xfPri, xfMask );
+    
+    
+% Low Frequency & Cardiac Harmonics x-f Mask
+elseif ( makeHarmonicFilter )
+    
+    % Initialise
+    xfLowFreqMask      = ones( nX, nY, nF );
+    xfFundamentalsMask = ones( nX, nY, nF );
+    xfHarmonicsMask    = ones( nX, nY, nF );
+
+    warning('off');
+    xfMask.xfLowFreqMask      = xfLowFreqMask;
+    xfMask.xfFundamentalsMask = xfFundamentalsMask;
+    xfMask.xfHarmonicsMask    = xfHarmonicsMask;
+    warning('on');
+    
+%     % Create Low Frequency x-f Mask using Gaussian Kernel
+%     xfLowFreqKernelCoords = ( iFdc-nT/ktFactor ):( iFdc+nT/ktFactor );
+%     xfLowFreqKernelWidth  = 1/( ktFactor/2 ) * numel( xfLowFreqKernelCoords );
+%     gaussWindow = gausswin( nF, xfLowFreqKernelWidth )';
+%     xfLowFreqMask = permute( repmat( gaussWindow, nX, 1, nY ), [1 3 2]);
+
+    % Create Low Frequency x-f Mask using Tukey Window
+    xfLowFreqKernelCoords = ( iFdc-nT/ktFactor ):( iFdc+nT/ktFactor );
+    xfLowFreqKernelWidth  = 1/( ktFactor/2 ) * numel( xfLowFreqKernelCoords );
+    tukeyWindow = zeros( 1,nF );
+    tukeyWindow( xfLowFreqKernelCoords ) = tukeywin( nF/( ktFactor/2 )+1, 0.5);
+    xfLowFreqMask = permute( repmat( tukeyWindow, nX, 1, nY ), [1 3 2]);
+
+    
+    % Create Heartbeat Harmonics x-f Mask
+
+    % Dilate Mask
+%     mask = imdilate( double(mask), strel('disk',5) ) > 0;
+    
+    % Find Edge Coordinates of x-t Mask
+    [ mRows, mCols ] = find(mask);
+    mRows = unique( mRows ); mCols = unique( mCols );
+    xMin = min(mCols); xMax = max(mCols);
+    yMin = min(mRows); yMax = max(mRows);
+
+    % Estimate Heart Rate for Identifying x-f Harmonic Locations
+    [ ~, ~, ~, ~, ~, fPeak ] = estimate_heartrate_xf( xtTrn, frameDuration, 'roi', mask>0, 'hrRange', hrRange, 'verbose', true, 'visible', 'off', 'useUpsampleFreq', false );
+
+
+    % Find Harmonic Locations
+
+    % Initalize
+    hPeaksNeg = 1;
+    hPeaksPos = 1;
+    hCtr = 1;
+    hSeparation = floor(diff(fPeak)/2); % Peak Separation
+    % floor in case peaks not integer separated
+    % this will mean slightly misaligned mask
+    % TODO: improved +/- 1 voxel peak shift
+    
+    while hPeaksNeg > 0
+
+        % Find Peak Locations
+        hPeaksNeg(hCtr) = fPeak(1) - (hCtr * hSeparation);
+        hPeaksPos(hCtr) = fPeak(2) + (hCtr * hSeparation);
+
+        if hPeaksNeg(hCtr) < 0
+            hPeaksNeg(end) = [];
+            hPeaksPos(end) = [];
+            break;
+        end
+
+        hCtr = hCtr + 1;
+
+    end
+    
+    numHarmonics = numel(hPeaksNeg);
+    
+%     % TODO: add condition if no harmonics found - perform uniform reg
+%     if numHarmonics == 0
+%        xfMask = xfLowFreqMask;
+%        xfPri = bsxfun( @times, xfPri, xfMask );
+%        return;
+%     end
+
+    % Create Masks of Fundamentals and Harmonics
+    fPeakNegPad = fPeak(1)-hPadding:fPeak(1)+hPadding;
+    fPeakPosPad = fPeak(2)-hPadding:fPeak(2)+hPadding;
+    
+    fMask = zeros( nX, nF );
+%     fMask( yMin-hPadding:yMax+hPadding, [fPeakNegPad, fPeakPosPad] ) = 1;
+    fMask( yMin:yMax, [fPeakNegPad, fPeakPosPad] ) = 1;
+    
+    for iH = 1:numHarmonics
+        hPeakNegPad(iH,:) = hPeaksNeg(iH)-hPadding:hPeaksNeg(iH)+hPadding;
+        hPeakPosPad(iH,:) = hPeaksPos(iH)-hPadding:hPeaksPos(iH)+hPadding;
+    
+        hPeaksNegAndPos = [hPeakNegPad(iH,:), hPeakPosPad(iH,:)];
+        hPeaksNegAndPos = hPeaksNegAndPos( hPeaksNegAndPos > 0 & hPeaksNegAndPos <= nF );
+        
+        hMask(:,:,iH) = zeros( nX, nF );
+%         hMask( yMin+hPadding:yMax+hPadding, hPeaksNegAndPos, iH ) = iH + 1;
+%         hMask( yMin-hPadding:yMax+hPadding, hPeaksNegAndPos, iH ) = 1/(2 * 2^(iH-1));
+        hMask( yMin:yMax, hPeaksNegAndPos, iH ) = 1/(2 * 2^(iH-1));
+    end
+    
+    % Get Mean x-f Signal in Fundamental Peaks
+    xfFundamentalsMask = permute( repmat( fMask, 1, 1, nY ), [1 3 2]);
+    xfFundamentalsMask( :, [1:xMin-1, xMax+1:nY], : ) = 0; % Apply mask heart region only
+
+    fPeaksMeanSig = mean( nonzeros( abs(xfPri) .* xfFundamentalsMask ) );
+    fPeaksMaxSig  =  max( nonzeros( abs(xfPri) .* xfFundamentalsMask ) );
+    
+%     % Scale Harmonics Masks
+%     harmonicMultiplier = fPeaksMaxSig;
+%     for iH = 1:numHarmonics
+%         hMask(:,:,iH) = hMask(:,:,iH) .* harmonicMultiplier;
+%     end
+
+    % DO NOT Scale Harmonics Masks
+    hMask(hMask > 0) = 1;
+    
+    hPeaksMaxSig = max(hMask(:));
+        
+    % Collapse Harmonics Masks
+    harmonicsMask = sum( cat( 3, hMask ), 3);
+    fundamentalsMask = fMask;
+    
+
+    % Convolve with Gaussian
+    % TODO: 2D Gaussian width currently hard-coded to 4 (= 2*ktFactor)
+    gaussKernel2D = gausswin( nF, xfLowFreqKernelWidth * 8 ) * gausswin( nF, xfLowFreqKernelWidth * 8 ).';
+    
+    harmonicsMaskConv = convn( harmonicsMask, gaussKernel2D, 'same' );
+    harmonicsMaskConv = harmonicsMaskConv ./ max(harmonicsMaskConv(:)); % Normalise
+    harmonicsMaskConv = harmonicsMaskConv .* hPeaksMaxSig; 
+
+    xfHarmonicsMask = permute( repmat( harmonicsMaskConv, 1, 1, nY ), [1 3 2]);
+    xfHarmonicsMask( :, [1:xMin-1, xMax+1:nY], : ) = 0; % Apply mask heart region only
+    
+    fundamentalsMaskConv = convn( fundamentalsMask, gaussKernel2D, 'same' );
+    fundamentalsMaskConv = ( fundamentalsMaskConv ) ./ max(fundamentalsMaskConv(:)); % Normalise
+
+    xfFundamentalsMask = permute( repmat( fundamentalsMaskConv, 1, 1, nY ), [1 3 2]);
+    xfFundamentalsMask( :, [1:xMin-1, xMax+1:nY], : ) = 0; % Apply mask heart region only
+
+%     % Regularize Fundamentals & Harmonics Masks
+%     xfFundamentalsMask = xfFundamentalsMask * alpha;
+%     xfHarmonicsMask    = xfHarmonicsMask * alpha;
+
+%     % Collate x-f Mask into Single Struct
+%     xfMask.xfLowFreqMask      = xfLowFreqMask;
+%     xfMask.xfFundamentalsMask = xfFundamentalsMask;
+%     xfMask.xfHarmonicsMask    = xfHarmonicsMask;
+
+%     % Apply x-f Mask to x-f Estimate
+% 
+%     xfLowFreqFundMask = bsxfun( @max, xfLowFreqMask, xfFundamentalsMask );
+%     xfPri = bsxfun( @times, xfPri, xfLowFreqFundMask );   
+%     xfPri = bsxfun( @max, xfPri, xfHarmonicsMask );
+    
+%     % Create x-f Harmonic Regularization Mask in Heart Region
+%     xfLowFreqHeartRegion = zeros( nX, nY, nF );
+%     xfLowFreqHeartRegion( yMin-hPadding-1:yMax+hPadding,:,: ) = xfLowFreqMask( yMin-hPadding-1:yMax+hPadding,:,: );
+    
+%     xfHeartRegionMask = bsxfun( @max, xfFundamentalsMask, xfHarmonicsMask );
+%     xfHeartRegionMask = bsxfun( @max, xfHeartRegionMask, xfLowFreqHeartRegion );
+    
+%     % Apply Regularization Alpha Value
+%     xfHeartRegionMask = xfHeartRegionMask * alpha;
+
+%     % Final xfMask
+%     xfMask = bsxfun( @max, xfLowFreqMask, xfHeartRegionMask );
+
+    xfHrmFndMask = bsxfun( @max, xfHarmonicsMask, xfFundamentalsMask );
+    xfHrmFndMask = xfHrmFndMask * alpha;
+
+    % Final xfMask
+    xfMask = bsxfun( @max, xfLowFreqMask, xfHrmFndMask );
+    
+    % Apply x-f Mask to x-f Estimate
+    xfPri  = bsxfun( @times, xfPri, xfMask );
+
 end
-
-% Apply x-f Mask to x-f Estimate
-
-xfPri = bsxfun( @times, xfPri, xfMask );
 
 
 %% Zero-Pad Baseline Data in Frequency
