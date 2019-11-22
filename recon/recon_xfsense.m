@@ -225,13 +225,13 @@ for iY = 1:(nY/nA),  % TODO: could replace iX-iY loops with iR loop and change t
             M      = priScaleFactor * abs( diag( rhoPri ) ); 
 
             % Create adaptive filter for current alias problem
-            F0 = M.^2*S' * inv( S*M.^2*S' + psi );  
+            F0 = M.^2*S' * inv( S*M.^2*S' + psi );  % Eq[7] in Tsao from M to -1
             
             % Adjust sign for each alias
             F = bsxfun( @times, aliasSign, F0 );
 
             % Solve
-            rhoRcn = F * rhoAcq; 
+            rhoRcn = F * rhoAcq; % Eq[7] in Tsao: M to -1 * rhoAlias. Not sure where - Srhobar comes in?
             
             % Insert in reconstructed x-f array
             xfRcn(aL) = rhoRcn(:);

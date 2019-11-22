@@ -101,6 +101,22 @@ S  = sqrt( sum( A(1:3,1:3).^2, 1 ) );
 im = dataScaling(2) *data2im( reshape_mrecon_to_nii( MR.Data ) ) + dataScaling(1);
 
 
+%% TAR:
+% Format data to match ISDPACS nifti output:
+% 
+% % Swap x/y (M/P) in A so it matches .nii format output by ISDPACS
+% A(:,1:2) = flip(A(:,1:2),2);   
+% % end TAR.
+% 
+% % permute x/y in image so it matches .nii output by ISDPACS
+% im = permute(im,[2,1,3]);
+% 
+% % warning
+% warning('Using adjustments to Josh`s mrecon toolbox: TAR nifti affine correction and image permute.');
+
+%end TAR
+
+
 %% Write to File
 
 N = make_nii( im, S );

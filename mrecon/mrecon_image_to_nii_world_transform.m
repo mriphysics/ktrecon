@@ -17,7 +17,7 @@ if all( MR.Parameter.ReconFlags.isimspace )
     MR.Parameter.Scan.curFOV = FOV;
     
     % Get Image to World Transformation
-    Aim2worldRAF = MR.Transform( 'ijk', 'RAF', stackNo );  % RL-AP-FH
+    Aim2worldRAF = MR.Transform( 'ijk', 'RAF', stackNo );  % RL-AP-FH / RAI
     
     % Reset Current Field of View
     MR.Parameter.Scan.curFOV = curFOV;
@@ -26,6 +26,14 @@ if all( MR.Parameter.ReconFlags.isimspace )
     AflipRL = [ -1 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1 ];
     AflipAP = [ 1 0 0 0; 0 -1 0 0; 0 0 1 0; 0 0 0 1 ];
     A       = AflipRL * AflipAP * Aim2worldRAF;  % NIfTI expects LR-PA-FH
+    
+%     % TAR:
+%     % LAS (aka: LR-AP-HF, aka: Radiological orientation)
+%     AflipRL = [ -1 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1 ];
+%     AflipFH = [ 1 0 0 0; 0 1 0 0; 0 0 -1 0; 0 0 0 1 ];
+%     A       = AflipRL * AflipFH * Aim2worldRAF;
+%     warning('Non-default edit: Using LAS affine in NIFTI.');
+%     end TAR
     
     % Shift Origin
     origin = A * [1 1 1 1]';
