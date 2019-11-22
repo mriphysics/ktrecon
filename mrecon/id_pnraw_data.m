@@ -37,7 +37,7 @@ for iD = 1:numel(D),
     C = strsplit( D(iD).name, '_' );
     try
         D(iD).seriesNo   = str2double( C{4} );
-        D(iD).seriesDesc = C{6}(1:(end-4));
+        D(iD).seriesDesc = C{6}(1:(end-4)); %TAR: change to C{7} if using mb1_ patch
     catch
         D(iD).seriesNo   = NaN;
         D(iD).seriesDesc = '';        
