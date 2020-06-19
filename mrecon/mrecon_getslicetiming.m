@@ -5,7 +5,7 @@ function T = mrecon_getslicetiming( MR, varargin )
 %
 %   T = MRECON_GETSLICETIMING( MR )
 %
-%   MRECON_WRITENIFTI2D( ... , 'param', val) 
+%   MRECON_GETSLICETIMING( ... , 'param', val) 
 %
 %   Output:
 %       T                   - struct of timing parameter values
@@ -109,7 +109,7 @@ seriesDuration  = MR.Parameter.GetValue('AC_total_scan_time');
 numLoc          = size( MR.Data, dim.loca );
 numDynDummy     = MR.Parameter.GetValue( 'MP_nr_dummy_dynamic_scans' );
 switch patchVersion
-    case 'PIH1'
+    case {'PIH1', 'PIH2'}
         if ( isVerbose )
             fprintf( '    patch version:    %s  \n', patchVersion )
             fprintf( '    aquisition order: dummy, acq_1, dummy, acq_2, ..., dummy, acq_n, \n' )
@@ -136,7 +136,7 @@ end
 % Calculate Slice Timing
 sliceTimeOffset = nan(1,numLoc);
 for iLoc = locOrder(:).'  % NOTE: for loop index values should be row vector
-    % Slice Timea Offset
+    % Slice Time Offset
     sliceTimeOffset(iLoc) = ( tSeries + double(iLoc-1) * sliceDuration + sliceStartOffset - tStudy );  % seconds
     if ( isVerbose )
         fprintf( '    %-25s %-15s %15.3f\n', sprintf( 'slice%02i time offset', iLoc ), '(s)', sliceTimeOffset(iLoc) );
