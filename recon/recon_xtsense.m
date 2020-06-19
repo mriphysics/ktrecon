@@ -153,26 +153,26 @@ add_param_fn( p, 'verbose',     default.isVerbose, ...
 
 parse( p, xtAcq, xtSmp, xtTrn, csm, psi, varargin{:} );
 
-xtBln        = p.Results.xtBln;
-safetyMargin = p.Results.safetyMargin;
+xtBln              = p.Results.xtBln;
+safetyMargin       = p.Results.safetyMargin;
 
-mask         = p.Results.mask;
-alpha        = p.Results.alpha;
-beta         = p.Results.beta;
-loFreq       = p.Results.loFreq;
-dt           = p.Results.dt;
-xfMaskKernelWidth = p.Results.xfMaskKernelWidth;
+mask               = p.Results.mask;
+alpha              = p.Results.alpha;
+beta               = p.Results.beta;
+loFreq             = p.Results.loFreq;
+dt                 = p.Results.dt;
+xfMaskKernelWidth  = p.Results.xfMaskKernelWidth;
 
-xToRecon     = p.Results.xToRecon;
+xToRecon           = p.Results.xToRecon;
 makeAdaptiveFilter = p.Results.makeAdaptiveFilter;
 
 makeHarmonicFilter = p.Results.makeHarmonicFilter;
-ktFactor     = p.Results.ktFactor;
-hPadding     = p.Results.hPadding;
-hrRange      = p.Results.hrRange;
-frameDuration = p.Results.frameDuration;
+ktFactor           = p.Results.ktFactor;
+hPadding           = p.Results.hPadding;
+hrRange            = p.Results.hrRange;
+frameDuration      = p.Results.frameDuration;
 
-isVerbose    = p.Results.verbose;
+isVerbose          = p.Results.verbose;
 
 
 %% Validate
