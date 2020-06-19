@@ -1,4 +1,4 @@
-function [ ktRcn, ktBln, noiseCov, xfTrn, xfMask, xfPri, xtTrn, xtTrnCus ] = recon_ktsense( ktAcq, ktTrn, csm, varargin )
+function [ ktRcn, ktBln, noiseCov, xfTrn, xfMask, xfPri, xtTrn, xtTrnCus, xtRcn ] = recon_ktsense( ktAcq, ktTrn, csm, varargin )
 %RECON_KTSENSE   k-t SENSE reconstruction of 2D dynamic MRI data
 %
 %   ktRcn = RECON_KTSENSE( ktAcq, ktTrn, csm )
