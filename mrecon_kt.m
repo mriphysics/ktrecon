@@ -44,13 +44,17 @@ default.cusTrnDirPath       = ''; %TAR
 default.isSelfCaliPreProc   = false; %TAR - outputDirPath must contain s*_recon_sc_slw.mat
 default.reconOpts           = {};
 default.isReconKtSense      = true;
+default.isSweepAcq          = false; % TAR
+default.swpKrnFullWidth     = 96; % TAR
+default.swpKrnSpacing       = []; % TAR
+default.swpKrnLoca          = []; % TAR
 default.ktRegStrength       = 0.0014;
 default.ktRegStrengthROI    = default.ktRegStrength / 100;
 default.mask                = [];
 default.makeHarmonicFilter  = false; % TAR
 default.patchVersion        = 'PIH1';
 default.isExportPdf         = true;
-default.isExportJson        = false; % TAR
+default.isExportJson        = false; % TAR - Note: not available in MRecon 515
 default.isExportGoalc       = true;
 default.isVerbose           = false;
 
@@ -92,6 +96,18 @@ add_param_fn(   p, 'reconoptionpairs', default.reconOpts, ...
 add_param_fn(   p, 'reconktsense', default.isReconKtSense, ...
     @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) );
 
+add_param_fn(   p, 'reconktsweep', default.isSweepAcq, ...
+    @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) ); % TAR
+
+add_param_fn(   p, 'sweepkernelwidth', default.swpKrnFullWidth, ...
+    @(x) validateattributes( x, {'numeric'}, {'positive','scalar'}, mfilename) ); % TAR
+
+add_param_fn(   p, 'sweepkernelspacing', default.swpKrnSpacing, ...
+    @(x) validateattributes( x, {'numeric'}, {'positive','scalar'}, mfilename) ); % TAR
+
+add_param_fn(   p, 'sweepkernellocations', default.swpKrnLoca, ...
+    @(x) validateattributes( x, {'numeric'}, {'positive','vector'}, mfilename) ); % TAR
+
 add_param_fn(   p, 'ktregstrength', default.ktRegStrength, ...
     @(x) validateattributes( x, {'numeric'}, {'positive','scalar'}, mfilename) );
 
@@ -125,14 +141,18 @@ senseRefFilePath    = p.Results.senseref;
 coilSurveyFilePath  = p.Results.coilsurvey;
 outputDirPath       = p.Results.outputdir;
 outFilePrefix       = p.Results.outputname;
-cusTrnDirPath       = p.Results.cusTrnDirPath;
-isSelfCaliPreProc   = p.Results.isSelfCaliPreProc;
+cusTrnDirPath       = p.Results.cusTrnDirPath; %TAR
+isSelfCaliPreProc   = p.Results.isSelfCaliPreProc; %TAR
 reconOpts           = p.Results.reconoptionpairs;
 isReconKtSense      = p.Results.reconktsense;
+isSweepAcq          = p.Results.reconktsweep; % TAR
+swpKrnFullWidth     = p.Results.sweepkernelwidth; % TAR
+swpKrnSpacing       = p.Results.sweepkernelspacing; % TAR
+swpKrnLoca          = p.Results.sweepkernellocations; % TAR
 ktRegStrength       = p.Results.ktregstrength;
 ktRegStrengthROI    = p.Results.ktregstrengthroi;
 mask                = p.Results.mask;
-makeHarmonicFilter  = p.Results.makeHarmonicFilter;
+makeHarmonicFilter  = p.Results.makeHarmonicFilter; %TAR
 patchVersion        = p.Results.patchversion;
 isExportPdf         = p.Results.exportpdf;
 isExportJson        = p.Results.exportjson;
@@ -335,89 +355,89 @@ TRN.Parameter.Recon.Sensitivities = SENS;
 
 %% Baseline Recon
 
-% Display Start Message
-disp_start_step_msg( 'Reconstructing baseline images' ),
-
-% Copy MRecon Object
-BLN = ACQ.Copy;
-BLN.Parameter.Recon.SENSE   = 'Yes';  % CLEAR coil combination
-
-% Get Data from MRecon Object
-ktAcq = swap_dim_reconframe_to_xydcl( BLN.Data );
-
-% Sampling Pattern
-ktSmp = single( sum( sum( ktAcq, 4 ), 1 ) ~= 0 );
-
-% Get Baseline
-ktBln = bsxfun( @rdivide, sum( ktAcq, 3 ), sum( ktSmp, 3 ) );
-
-% Put Data in Back in MRecon Object
-BLN.Data = swap_dim_xydcl_to_reconframe( ktBln );
-
-% Transform to Image Space
-mrecon_k2i( BLN );
-
-% Image Space Postprocessing
-mrecon_postprocess( BLN );
-
-% Write to NIfTI
-blnAbNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_ab' ) );
-blnAbNiiFilePath = mrecon_writenifti( BLN, blnAbNiiFilePath, 'datatype', 'magnitude' );
-blnReNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_re' ) );
-blnReNiiFilePath = mrecon_writenifti( BLN, blnReNiiFilePath, 'datatype', 'real' );
-blnImNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_im' ) );
-blnImNiiFilePath = mrecon_writenifti( BLN, blnImNiiFilePath, 'datatype', 'imaginary' );
-
-% Save as .mat
-xtBln = BLN.Data;
-blnMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_recon.mat' ) );
-save( blnMatFilePath, 'xtBln', '-v7.3' );
-clear xtBln 
-
-% Display Time Elapsed Message
-disp_time_elapsed_msg( toc )
-disp_write_file_msg( blnAbNiiFilePath )
-disp_write_file_msg( blnReNiiFilePath )
-disp_write_file_msg( blnImNiiFilePath )
-disp_write_file_msg( blnMatFilePath )
+% % Display Start Message
+% disp_start_step_msg( 'Reconstructing baseline images' ),
+% 
+% % Copy MRecon Object
+% BLN = ACQ.Copy;
+% BLN.Parameter.Recon.SENSE   = 'Yes';  % CLEAR coil combination
+% 
+% % Get Data from MRecon Object
+% ktAcq = swap_dim_reconframe_to_xydcl( BLN.Data );
+% 
+% % Sampling Pattern
+% ktSmp = single( sum( sum( ktAcq, 4 ), 1 ) ~= 0 );
+% 
+% % Get Baseline
+% ktBln = bsxfun( @rdivide, sum( ktAcq, 3 ), sum( ktSmp, 3 ) );
+% 
+% % Put Data in Back in MRecon Object
+% BLN.Data = swap_dim_xydcl_to_reconframe( ktBln );
+% 
+% % Transform to Image Space
+% mrecon_k2i( BLN );
+% 
+% % Image Space Postprocessing
+% mrecon_postprocess( BLN );
+% 
+% % Write to NIfTI
+% blnAbNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_ab' ) );
+% blnAbNiiFilePath = mrecon_writenifti( BLN, blnAbNiiFilePath, 'datatype', 'magnitude' );
+% blnReNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_re' ) );
+% blnReNiiFilePath = mrecon_writenifti( BLN, blnReNiiFilePath, 'datatype', 'real' );
+% blnImNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_im' ) );
+% blnImNiiFilePath = mrecon_writenifti( BLN, blnImNiiFilePath, 'datatype', 'imaginary' );
+% 
+% % Save as .mat
+% xtBln = BLN.Data;
+% blnMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_bln_recon.mat' ) );
+% save( blnMatFilePath, 'xtBln', '-v7.3' );
+% clear xtBln 
+% 
+% % Display Time Elapsed Message
+% disp_time_elapsed_msg( toc )
+% disp_write_file_msg( blnAbNiiFilePath )
+% disp_write_file_msg( blnReNiiFilePath )
+% disp_write_file_msg( blnImNiiFilePath )
+% disp_write_file_msg( blnMatFilePath )
 
 
 %% Sliding Window Recon
 
-% Display Start Message
-disp_start_step_msg( 'Computing sliding window reconstruction of undersampled data' ),
-
-% Sliding Window Reconstruction MRecon Object
-SLW = ACQ.Copy;
-SLW.Parameter.Recon.SENSE   = 'Yes';  % CLEAR coil combination
-
-% Get Data from MRecon Object
-ktSlw = swap_dim_reconframe_to_xydcl( SLW.Data );
-
-% Fill k-Space Using Sliding Window for Each Slice
-for iSlice = 1:size(SLW.Data,dim.loca)
-    ktSlw(:,:,:,:,iSlice) = kt_sliding_window( ktSlw(:,:,:,:,iSlice) );
-end
-
-% Put Data in Back in MRecon Object
-SLW.Data = swap_dim_xydcl_to_reconframe( ktSlw );
-
-% Recon Images
-mrecon_k2i( SLW )
-
-% Postprocessing
-mrecon_postprocess( SLW );
-
-% Get Timing
-frameDuration = mrecon_calc_frame_duration( SLW );
-
-% Save as NIfTI
-slwNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_slw_ab' ) );
-slwNiiFilePath = mrecon_writenifti( SLW, slwNiiFilePath, 'frameduration', frameDuration );
-
-% Display Time Elapsed Message
-disp_time_elapsed_msg( toc ),
-disp_write_file_msg( slwNiiFilePath )
+% % Display Start Message
+% disp_start_step_msg( 'Computing sliding window reconstruction of undersampled data' ),
+% 
+% % Sliding Window Reconstruction MRecon Object
+% SLW = ACQ.Copy;
+% SLW.Parameter.Recon.SENSE   = 'Yes';  % CLEAR coil combination
+% 
+% % Get Data from MRecon Object
+% ktSlw = swap_dim_reconframe_to_xydcl( SLW.Data );
+% 
+% % Fill k-Space Using Sliding Window for Each Slice
+% for iSlice = 1:size(SLW.Data,dim.loca)
+%     ktSlw(:,:,:,:,iSlice) = kt_sliding_window( ktSlw(:,:,:,:,iSlice) );
+% end
+% 
+% % Put Data in Back in MRecon Object
+% SLW.Data = swap_dim_xydcl_to_reconframe( ktSlw );
+% 
+% % Recon Images
+% mrecon_k2i( SLW )
+% 
+% % Postprocessing
+% mrecon_postprocess( SLW );
+% 
+% % Get Timing
+% frameDuration = mrecon_calc_frame_duration( SLW );
+% 
+% % Save as NIfTI
+% slwNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_slw_ab' ) );
+% slwNiiFilePath = mrecon_writenifti( SLW, slwNiiFilePath, 'frameduration', frameDuration );
+% 
+% % Display Time Elapsed Message
+% disp_time_elapsed_msg( toc ),
+% disp_write_file_msg( slwNiiFilePath )
 
 
 %% Self-calibrated Sliding Window Preprocessing
@@ -431,7 +451,7 @@ if isSelfCaliPreProc
     SCSLW = ACQ.Copy;
     SCSLW.Parameter.Recon.Sensitivities = SENS;
     
-    % Performed preprocessing
+    % Perform preprocessing
     kt_sc_slw_preproc( outputDirPath, outFilePrefix, SCSLW );
     
     % Display Time Elapsed Message
@@ -445,7 +465,7 @@ xtTrnCus = [];
 if ~isempty( cusTrnDirPath )
     
     disp_start_step_msg( 'Loading Custom Training data' ),
-    cusTrnMatFilePath = fullfile( cusTrnDirPath, strcat( outFilePrefix, '_sc_slw_recon.mat' ) );            
+    cusTrnMatFilePath = fullfile( cusTrnDirPath, strcat( outFilePrefix, '_rlt_sc_slw_recon.mat' ) );            
     load( cusTrnMatFilePath ); 
     xtTrnCus = xtRcn; clear xtRcn
     disp_time_elapsed_msg( toc ),
@@ -487,20 +507,221 @@ if ( isReconKtSense )
     DC = ACQ.Copy;
     DC.Data = sum( sum( DC.Data, dim.chan ), dim.dyn );
     
-    % Process Slice-by-Slice
     numSlice = size( RCN.Data, dim.loca );
     
-    for iSlice = 1:numSlice
-%      for iSlice = 6; warning('REMINDER: slice number hard coded.');
+    % Partition Sweep Data
+    if ( isSweepAcq )
         
-        % Display Start Message
-        disp_start_step_msg( sprintf( '  slice %3i  \n', iSlice ) )
+        fprintf( 'Reconstructing Sweep Acquisition ... \n' ),
+        
+        nX   = size( ACQ.Data, dim.x );
+        nY   = size( ACQ.Data, dim.y );
+        nZ   = size( ACQ.Data, dim.loca );
+        nT   = size( ACQ.Data, dim.dyn );
+        nC   = size( ACQ.Data, dim.chan );        
+        nZnT = nT * nZ; % = No. 'Frames' in Sweep volume
+        
+        % Configure Sweep k-space Kernels
+        clear swpKernels ktAcqSwpKrn ktTrnSwpKrn
+        
+        swpKrnHalfWidth = ceil( swpKrnFullWidth / 2 );
+        
+        if swpKrnLoca
+            swpKrnSpacing = unique( diff( swpKrnLoca ) );
+        end
+        
+        if isempty(swpKrnSpacing)
+            swpKrnSpacing = swpKrnFullWidth; % M2D equivalent
+        end
+        
+        if isempty(swpKrnLoca)
+            swpKrnLoca = swpKrnHalfWidth:swpKrnSpacing:nZnT;
+        end
+        
+        nSwpKrn = numel( swpKrnLoca );
+        
+        % Array Sweep Kernels
+        for iKrn = 1:nSwpKrn
+            swpKernels(:,iKrn) = ...
+                swpKrnLoca(iKrn)-swpKrnHalfWidth+1:swpKrnLoca(iKrn)+swpKrnHalfWidth;
+        end
+        
+        % Ensure Kernels within Acquisition Bounds
+        [~,swpKrnOutOfBounds,~] = find(swpKernels > nZnT);
+        swpKernels( :, unique(swpKrnOutOfBounds) ) = [];
+        nSwpKrn = size( swpKernels, 2 );
+
+        % Plot Sweep Kernels
+        if isVerbose
+
+            % Sweep Kernels
+            figure; hold on;
+            plot(swpKernels','.b');
+            
+            % M2D Frames
+            m2dKrnLoca = 0:nT:nZnT;
+            for iKrn = 1:numel(m2dKrnLoca)
+                plot(1:nSwpKrn, repmat(m2dKrnLoca(iKrn),1,nSwpKrn),'k--');
+            end
+            
+            xlabel('Sweep Kernel No.'); ylabel('Frame Index');
+            legend('Sweep Kernels','Location','NorthWest');
+            axis([1 nSwpKrn 1 nZnT]);
+            
+            % Save
+            hFig = gcf; hFig.Name = strcat( outFilePrefix, '_swp_kernels' );
+            saveas( hFig, [outputDirPath '/' hFig.Name, '.fig' ] );
+            saveas( hFig, [outputDirPath '/' hFig.Name, '.png' ] ); clear hFig;
+            
+        end
+        
+        
+        % Reshape ACQ & TRN Data
+        ktAcqSwp    = swap_dim_reconframe_to_xydcl( ACQ.Data );
+        ktAcqSwp    = reshape( permute( ktAcqSwp, [1,2,4,3,5] ), nX, nY, nC, nT*nZ );
+        ktAcqSwpKrn = single( zeros ( nX, nY, nC, nSwpKrn, swpKrnFullWidth ) );
+        for iKrn = 1:nSwpKrn
+            ktAcqSwpKrn(:,:,:,iKrn,:) = ktAcqSwp(:,:,:,swpKernels(:,iKrn));
+        end
+        ktAcqSwpKrn = permute( ktAcqSwpKrn, [1,2,5,3,4] );
+        clear ktAcqSwp
+        
+        ktTrnSwp    = swap_dim_reconframe_to_xydcl( TRN.Data );
+        ktTrnSwp    = reshape( permute( ktTrnSwp, [1,2,4,3,5] ), nX, nY, nC, nT*nZ );
+        ktTrnSwpKrn = single( zeros ( nX, nY, nC, nSwpKrn, swpKrnFullWidth ) );
+        for iKrn = 1:nSwpKrn
+            ktTrnSwpKrn(:,:,:,iKrn,:) = ktTrnSwp(:,:,:,swpKernels(:,iKrn));
+        end
+        ktTrnSwpKrn = permute( ktTrnSwpKrn, [1,2,5,3,4] );
+        clear ktTrnSwp
+        
+        
+        % View Sweep Kernel Acq K-Space
+        if isVerbose
+            
+            figure;
+            if nSwpKrn > 12
+                numKrnToPlot = 12;
+            else
+                numKrnToPlot = nSwpKrn;
+            end
+            krnToPlot = round(linspace(1,nSwpKrn,numKrnToPlot));
+            for ii = 1:numKrnToPlot
+                subplot(4,3,ii);
+                imagesc(squeeze(abs( ...
+                    ktAcqSwpKrn(ceil(nX/2),:,:,ceil(nC/2),krnToPlot(ii)) )), [0, 500] );
+                title(['Kernel No. ' num2str(krnToPlot(ii))]);
+                colormap('gray');
+            end
+            
+            % Save
+            hFig = gcf; hFig.Name = strcat( outFilePrefix, '_swp_kernel_kspace' );
+            saveas( hFig, [outputDirPath '/' hFig.Name, '.fig' ] );
+            saveas( hFig, [outputDirPath '/' hFig.Name, '.png' ] ); clear hFig;
+             
+        end
+        
+        fprintf( 'No. Sweep Kernels    = %3i \n', nSwpKrn ),
+        fprintf( 'Sweep Kernel Width   = %3i \n', swpKrnFullWidth ),
+        fprintf( 'Sweep Kernel Spacing = %3i \n', swpKrnSpacing ),
+
+        % Save Sweep Kernel Parameters
+        swpParamMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_swp_parameters.mat' ) );
+        save( swpParamMatFilePath, 'swpKernels', 'nSwpKrn', 'swpKrnFullWidth', 'swpKrnHalfWidth', 'swpKrnLoca', 'swpKrnSpacing', '-v7.3' );   
+        
+        
+        % Weighted CSM Message
+        fprintf( 'Creating Weighted CSM ... \n' ),
+        
+        % CSM Original Locations
+        csmLoca = 1:nZnT;
+        csmLoca = reshape(csmLoca, [], nZ);
+
+        % CSM Identifier Matrix
+        csmIDs = 1:nZ;
+        csmIDs = repmat(csmIDs,nT,1);
+
+        
+        % Calculate CSM Weighting Matrices
+        csmOverlapFractions = [];
+        uWgt = {}; % Note: need to be arrays to account for kernels overlapping singular or multiple csmLoca
+        W    = {}; % Big matrix array of weights for simple .* with original CSM
+        
+        for iKrn = 1:nSwpKrn
+            
+            currKrn    = swpKernels(:,iKrn);
+            currWgt    = csmIDs(csmLoca(currKrn));
+            uWgt{iKrn} = unique(currWgt);
+            
+            % Overlap Between Kernels and Original CSM
+            for iWgt = 1:numel(uWgt{iKrn})
+                csmOverlapFractions(iWgt,iKrn) = sum(currWgt == uWgt{iKrn}(iWgt));
+                Wgts(iWgt,iKrn)          = csmOverlapFractions(iWgt,iKrn) / swpKrnFullWidth;
+                
+                % Create Weights Matrices
+                W{iKrn}(:,:,:,:,iWgt) = Wgts(iWgt,iKrn) * single( ones( [nX, nY, 1, nC] ) );
+            end
+            
+        end
+        
+        % Create Weighted CSM by Linear Combination
+        csmWgt = single( zeros( [nX, nY, 1, nC, nSwpKrn] ) );
+        
+        for iKrn = 1:nSwpKrn
+            csmWgt(:,:,:,:,iKrn) = sum( W{iKrn} .* csm(:,:,:,:,uWgt{iKrn}), 5 );
+        end
+        
+        % Save Weighted CSM
+        csmWgtMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_csm_wgt.mat' ) );
+        save( csmWgtMatFilePath, 'csmWgt', 'Wgts', 'uWgt', 'csmLoca', '-v7.3' );
+                
+        % Memory Management
+        clear W Wgts uWgt csmLoca csmIDs csmOverlapFractions currKrn currWgt
+
+        % TODO: Do I need to update ACQ/TRN objects here?:
+        % Maybe I should perform the csmSwp processing in the csm block
+        %     ACQ.Parameter.Recon.Sensitivities = SENS;
+        %     TRN.Parameter.Recon.Sensitivities = SENS;
+        
+        numSlice = nSwpKrn;
+        
+        RCN.Data = single( zeros( nX,nY,1,1,swpKrnFullWidth,1,1,nSwpKrn ) );
+        DC.Data  = single( zeros( nX,nY,1,1,1,1,1,nSwpKrn ) );
+        
+    end
+    
+    
+    % Process Slice-by-Slice
+%     keyboard; 
+%     W=74; RCN.Data = RCN.Data(:,:,:,:,1:W,:,:,:); % vary M2D width
+    for iSlice = 1:numSlice
         
         % Get Data from MRecon Objects
-        ktAcq       = swap_dim_reconframe_to_xydcl( ACQ.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
-        ktTrn       = swap_dim_reconframe_to_xydcl( TRN.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
-        csm         = swap_dim_reconframe_to_xydcl( ACQ.Parameter.Recon.Sensitivities.Sensitivity(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
-        noiseCov    = SENS.Psi;
+        if isSweepAcq
+            ktAcq       = ktAcqSwpKrn(:,:,:,:,iSlice);
+            ktTrn       = ktTrnSwpKrn(:,:,:,:,iSlice);
+            csm         = csmWgt(:,:,:,:,iSlice);
+%             warning('REMINDER TOMO: CSM original in use.');
+%             csm         = swap_dim_reconframe_to_xydcl( ACQ.Parameter.Recon.Sensitivities.Sensitivity(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
+            noiseCov    = SENS.Psi;
+            
+            % Display Start Message
+            disp_start_step_msg( sprintf( '  kernel %3i of %1i  \n', iSlice, numSlice ) )
+            
+        else
+            ktAcq       = swap_dim_reconframe_to_xydcl( ACQ.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
+            ktTrn       = swap_dim_reconframe_to_xydcl( TRN.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
+            csm         = swap_dim_reconframe_to_xydcl( ACQ.Parameter.Recon.Sensitivities.Sensitivity(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
+            noiseCov    = SENS.Psi;
+            
+%             warning('Hard-code REMINDER TOMO: Reduced nFrames in k-t recon');
+%             ktAcq = ktAcq(:,:,75-(W/2):74+(W/2),:);
+%             ktTrn = ktTrn(:,:,75-(W/2):74+(W/2),:);
+            
+            % Display Start Message
+            disp_start_step_msg( sprintf( '  slice %3i of %1i  \n', iSlice, numSlice ) )
+
+        end
         
         % Get Custom Training Data
         if ~isempty( xtTrnCus )
@@ -510,7 +731,7 @@ if ( isReconKtSense )
         % k-t SENSE Reconstruction
         if isempty( mask )
             % Uniform Regularization
-            [ ktRcn, ktDc, ~, ~, xfMask, xfPri ] = recon_ktsense( ktAcq, ktTrn, csm, 'noisecov', noiseCov, 'lambda0', ktRegStrength );
+            [ ktRcn, ktDc, ~, ~, xfMask, xfPri, ~, ~, xtRcn ] = recon_ktsense( ktAcq, ktTrn, csm, 'noisecov', noiseCov, 'lambda0', ktRegStrength );
         else
             if isempty( xtTrnCus )
                 % Adaptive Regularization
@@ -526,10 +747,16 @@ if ( isReconKtSense )
         %   3) calculated in sensitivity maps MRecon object SENS
         
         % Put Data in Back in MRecon Objects
-        RCN.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) = swap_dim_xydcl_to_reconframe( ktRcn );
-        DC.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:)  = swap_dim_xydcl_to_reconframe( ktDc );
+        RCN.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) = single( swap_dim_xydcl_to_reconframe( ktRcn ) );
+        DC.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:)  = single( swap_dim_xydcl_to_reconframe( ktDc ) );
         
         % Save x-f Mask and Training Data
+        if isSweepAcq
+            xfmaskMatFilePath = fullfile( outputDirPath, sprintf( '%s_slice%02i_pri_swp.mat', outFilePrefix, iSlice ) );
+            save( xfmaskMatFilePath, 'xfMask', 'xfPri', '-v7.3' );
+            clear xfMask xfPri
+        end
+        
         if makeHarmonicFilter
             xfmaskMatFilePath = fullfile( outputDirPath, sprintf( '%s_slice%02i_pri_hrm.mat', outFilePrefix, iSlice ) );
             save( xfmaskMatFilePath, 'xfMask', 'xfPri', 'xtTrnCusSlice', '-v7.3' );
@@ -546,6 +773,13 @@ if ( isReconKtSense )
         disp_write_file_msg( reconMatFilePath ),
         
     end
+    
+    % Memory Management
+    clear xfMask xfPri
+    clear ktAcqSwpKrn ktTrnSwpRcn
+    clear ktAcqSwp ktTrnSwp
+    clear ktAcq ktTrn
+    clear csmSwp imCoilSwp imBodySwp
     
     % Display Start Message
     disp_start_step_msg( 'Finalising k-t SENSE reconstruction' ),
@@ -564,15 +798,14 @@ if ( isReconKtSense )
     frameDuration = mrecon_calc_frame_duration( RCN );
     
     % Write Real-Time as NIfTI
-    rltAbNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_ab' ) );
-    rltAbNiiFilePath = mrecon_writenifti( RCN, rltAbNiiFilePath, 'frameduration', frameDuration, 'datatype', 'magnitude' );
-    rltReNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_re' ) );
-    rltReNiiFilePath = mrecon_writenifti( RCN, rltReNiiFilePath, 'frameduration', frameDuration, 'datatype', 'real' );
-    rltImNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_im' ) );
-    rltImNiiFilePath = mrecon_writenifti( RCN, rltImNiiFilePath, 'frameduration', frameDuration, 'datatype', 'imaginary' );
-    % TAR
-    rltPhNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_ph' ) );
-    rltPhNiiFilePath = mrecon_writenifti( RCN, rltPhNiiFilePath, 'frameduration', frameDuration, 'datatype', 'phase' );
+    rltAbNiiFilePath   = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_ab' ) );
+    rltAbNiiFilePath   = mrecon_writenifti( RCN, rltAbNiiFilePath, 'frameduration', frameDuration, 'datatype', 'magnitude' );
+    rltReNiiFilePath   = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_re' ) );
+    rltReNiiFilePath   = mrecon_writenifti( RCN, rltReNiiFilePath, 'frameduration', frameDuration, 'datatype', 'real' );
+    rltImNiiFilePath   = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_im' ) );
+    rltImNiiFilePath   = mrecon_writenifti( RCN, rltImNiiFilePath, 'frameduration', frameDuration, 'datatype', 'imaginary' );
+    rltPhNiiFilePath   = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_ph' ) );
+    rltPhNiiFilePath   = mrecon_writenifti( RCN, rltPhNiiFilePath, 'frameduration', frameDuration, 'datatype', 'phase' );
     rltCplxNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_cplx' ) );
     rltCplxNiiFilePath = mrecon_writenifti( RCN, rltCplxNiiFilePath, 'frameduration', frameDuration, 'datatype', 'complex' );
    
@@ -609,7 +842,14 @@ if ( isReconKtSense )
     
     % Save Parameters
     PARAM = mrecon_getparameters( RCN );
-    PARAM.Timing = mrecon_getslicetiming( RCN, 'patchversion', patchVersion );
+    if isSweepAcq
+        PARAM.Timing = mrecon_getslicetiming_sweep( RCN, 'patchversion', patchVersion );
+        % TODO?: 
+        % Update NrDyn for compatibility with preproc.m?
+        % PARAM.Encoding.NrDyn = [swpKrnFullWidth, swpKrnFullWidth];
+    else
+        PARAM.Timing = mrecon_getslicetiming( RCN, 'patchversion', patchVersion );
+    end
     rltParamMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_parameters.mat' ) );
     save( rltParamMatFilePath, 'PARAM', '-v7.3' );
     
@@ -618,10 +858,8 @@ if ( isReconKtSense )
     disp_write_file_msg( rltAbNiiFilePath )
     disp_write_file_msg( rltReNiiFilePath )
     disp_write_file_msg( rltImNiiFilePath )
-    % TAR
     disp_write_file_msg( rltPhNiiFilePath )
     disp_write_file_msg( rltCplxNiiFilePath )
-    % end TAR
     disp_write_file_msg( rltParamMatFilePath )
     disp_write_file_msg( rltMatFilePath )
     disp_write_file_msg( priAbNiiFilePath )
@@ -631,7 +869,7 @@ if ( isReconKtSense )
     disp_write_file_msg( dcAbNiiFilePath )
     disp_write_file_msg( dcReNiiFilePath )
     disp_write_file_msg( dcImNiiFilePath )
-    disp_write_file_msg( dcMatFilePath )
+    disp_write_file_msg( dcMatFilePath )  
     
 else
     
@@ -659,6 +897,8 @@ end
 
 
 %% Export JSON
+
+% Note: not available in MRecon 515
 
 if ( isExportJson )
     
