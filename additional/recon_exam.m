@@ -2,7 +2,6 @@ function recon_exam( fcmrNo, seriesNos, rawDataDirPath, patchVersion, isGeoCorrn
 %RECON_EXAM  reconstruct multiple series in one MRI exam
 
 % jfpva (joshua.vanamerom@kcl.ac.uk)
-% tar (t.roberts@kcl.ac.uk)
 
 
 %% Dependencies
@@ -96,7 +95,7 @@ for seriesNo = seriesNos
         
         elseif ( isCusTrnData )
             
-            cusTrnMatFilePath = fullfile( cusTrnDirPath, strcat( ['s' num2str(seriesNo), '_sc_slw_recon.mat'] ) );  
+            cusTrnMatFilePath = fullfile( cusTrnDirPath, strcat( ['s' num2str(seriesNo), '_hrh_recon.mat'] ) );  
             fprintf( 'custom training data file:       %s\n', cusTrnMatFilePath );
             mrecon_kt( rawDataFilePath, 'senseref', senseRefFilePath, 'coilsurvey', coilSurveyFilePath, 'outputdir', outputDirPath, 'outputname', idStr, 'patchversion', patchVersion, 'reconoptionpairs', reconOpts, 'mask', mask, 'isSelfCaliPreProc', isSelfCaliPreProc, 'cusTrnDirPath', cusTrnDirPath, 'makeHarmonicFilter', makeHarmonicFilter )
         
@@ -106,8 +105,8 @@ for seriesNo = seriesNos
     % Uniform Regularization
     else
         
-        mrecon_kt( rawDataFilePath, 'senseref', senseRefFilePath, 'coilsurvey', coilSurveyFilePath, 'outputdir', outputDirPath, 'outputname', idStr, 'patchversion', patchVersion, 'reconoptionpairs', reconOpts )
-    
+        mrecon_kt( rawDataFilePath, 'senseref', senseRefFilePath, 'coilsurvey', coilSurveyFilePath, 'outputdir', outputDirPath, 'outputname', idStr, 'patchversion', patchVersion, 'reconoptionpairs', reconOpts );
+
     end
     
 end
