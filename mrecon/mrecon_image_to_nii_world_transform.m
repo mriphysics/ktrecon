@@ -10,8 +10,9 @@ if all( MR.Parameter.ReconFlags.isimspace )
     FOV = [ 0 0 0 ];
     FOV(1) = MR.Parameter.Scan.RecVoxelSize(1) * size(MR.Data,1);
     FOV(2) = MR.Parameter.Scan.RecVoxelSize(2) * size(MR.Data,2);
-    FOV(3) = ( MR.Parameter.Scan.RecVoxelSize(3) + MR.Parameter.Scan.SliceGap(1) ) * size(MR.Data,8) - MR.Parameter.Scan.SliceGap(1);
-
+    FOV(3) = ( MR.Parameter.Scan.RecVoxelSize(3) + MR.Parameter.Scan.SliceGap(1) ) ...
+        * MR.Parameter.Scan.ImagesPerStack - MR.Parameter.Scan.SliceGap(1);               
+     
     % Set Current Field of View
     curFOV = MR.Parameter.Scan.curFOV;
     MR.Parameter.Scan.curFOV = FOV;

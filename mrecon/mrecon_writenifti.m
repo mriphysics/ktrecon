@@ -92,17 +92,27 @@ end
 
 A  = mrecon_image_to_nii_world_transform( MR );
 
+% Sweep Adjustment
+if isSweepAcq
+
+    numLoca = size( MR.Data, 8 );
+    FOV = MR.Parameter.Scan.FOV;
+%     Gap = unique( MR.Parameter.Scan.SliceGap ); %NB: no gap in Sweep acquisitions, just faster Sweep rate if gap > 0
+    
+    A(1,3) = (FOV(3) + 1) / numLoca; % +1 because counts from zero
+
+end
+
 % Calculate Scaling (Voxel Size)
 S  = sqrt( sum( A(1:3,1:3).^2, 1 ) );
 
 
 %% Format Image Data
 
-im = dataScaling(2) *data2im( reshape_mrecon_to_nii( MR.Data ) ) + dataScaling(1);
+im = dataScaling(2) * data2im( reshape_mrecon_to_nii( MR.Data ) ) + dataScaling(1);
 
 
-%% TAR:
-% Format data to match ISDPACS nifti output:
+%% TAR - Format data to match ISDPACS nifti output:
 % 
 % % Swap x/y (M/P) in A so it matches .nii format output by ISDPACS
 % A(:,1:2) = flip(A(:,1:2),2);   
@@ -113,8 +123,8 @@ im = dataScaling(2) *data2im( reshape_mrecon_to_nii( MR.Data ) ) + dataScaling(1
 % 
 % % warning
 % warning('Using adjustments to Josh`s mrecon toolbox: TAR nifti affine correction and image permute.');
-
-%end TAR
+%
+% end TAR
 
 
 %% Write to File
