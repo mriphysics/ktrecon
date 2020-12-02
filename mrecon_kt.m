@@ -45,9 +45,9 @@ default.isSelfCaliPreProc   = false; %TAR - outputDirPath must contain s*_recon_
 default.reconOpts           = {};
 default.isReconKtSense      = true;
 default.isSweepAcq          = false; % TAR
-default.swpKrnFullWidth     = 96; % TAR
-default.swpKrnSpacing       = []; % TAR
-default.swpKrnLoca          = []; % TAR
+default.swpWinFullWidth     = 96; % TAR
+default.swpWinSpacing       = []; % TAR
+default.swpWinLoca          = []; % TAR
 default.ktRegStrength       = 0.0014;
 default.ktRegStrengthROI    = default.ktRegStrength / 100;
 default.mask                = [];
@@ -99,13 +99,13 @@ add_param_fn(   p, 'reconktsense', default.isReconKtSense, ...
 add_param_fn(   p, 'reconktsweep', default.isSweepAcq, ...
     @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) ); % TAR
 
-add_param_fn(   p, 'sweepkernelwidth', default.swpKrnFullWidth, ...
+add_param_fn(   p, 'sweepwindowwidth', default.swpWinFullWidth, ...
     @(x) validateattributes( x, {'numeric'}, {'positive','scalar'}, mfilename) ); % TAR
 
-add_param_fn(   p, 'sweepkernelspacing', default.swpKrnSpacing, ...
+add_param_fn(   p, 'sweepwindowspacing', default.swpWinSpacing, ...
     @(x) validateattributes( x, {'numeric'}, {'positive','scalar'}, mfilename) ); % TAR
 
-add_param_fn(   p, 'sweepkernellocations', default.swpKrnLoca, ...
+add_param_fn(   p, 'sweepwindowlocations', default.swpWinLoca, ...
     @(x) validateattributes( x, {'numeric'}, {'positive','vector'}, mfilename) ); % TAR
 
 add_param_fn(   p, 'ktregstrength', default.ktRegStrength, ...
@@ -146,9 +146,9 @@ isSelfCaliPreProc   = p.Results.isSelfCaliPreProc; %TAR
 reconOpts           = p.Results.reconoptionpairs;
 isReconKtSense      = p.Results.reconktsense;
 isSweepAcq          = p.Results.reconktsweep; % TAR
-swpKrnFullWidth     = p.Results.sweepkernelwidth; % TAR
-swpKrnSpacing       = p.Results.sweepkernelspacing; % TAR
-swpKrnLoca          = p.Results.sweepkernellocations; % TAR
+swpWinFullWidth     = p.Results.sweepwindowwidth; % TAR
+swpWinSpacing       = p.Results.sweepwindowspacing; % TAR
+swpWinLoca          = p.Results.sweepwindowlocations; % TAR
 ktRegStrength       = p.Results.ktregstrength;
 ktRegStrengthROI    = p.Results.ktregstrengthroi;
 mask                = p.Results.mask;
@@ -338,6 +338,8 @@ switch csmCalcMethod
         csmMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_csm.mat' ) );
         save( csmMatFilePath, 'csm', 'imBody', 'imCoil', 'psiSens', '-v7.3' );
         
+        clear csm imBody imCoil
+        
         disp_time_elapsed_msg( toc )
         
         disp_write_file_msg( csmMatFilePath )
@@ -351,6 +353,25 @@ end
 % Add Sensitivity Maps to Undersampled and Training Data MRecon Objects
 ACQ.Parameter.Recon.Sensitivities = SENS;
 TRN.Parameter.Recon.Sensitivities = SENS;
+
+
+% Generate & Save Weighted CSM for Sweep
+if isSweepAcq
+    for iWin = 1:numel( swpWinLoca )
+        [~, ~, csmWgt] = mrecon_ktsweep_window( ACQ, TRN, swpWinFullWidth, ...
+            'sweepwindowlocations', swpWinLoca, ...
+            'sweepwindowindex', iWin  );
+    end
+    
+    csmWgtMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_csm_wgt.mat' ) );
+    save( csmWgtMatFilePath, 'csmWgt', '-v7.3' );
+    
+    % TODO?: Update ACQ/TRN objects with csmWgt?:
+    %     SENS.Sensitivities = csmWgt;
+    %     ACQ.Parameter.Recon.Sensitivities = SENS;
+    %     TRN.Parameter.Recon.Sensitivities = SENS;
+end
+
 
 
 %% Baseline Recon
@@ -490,233 +511,63 @@ end
 
 %% k-t SENSE Reconstruction
 
+% Display Start Message
+fprintf( 'Performing k-t SENSE reconstruction  \n' ),
+
+% k-t SENSE Reconstruction MRecon Object
+RCN = ACQ.Copy;
+RCN.Data = sum (RCN.Data, dim.chan );
+
+% k-t SENSE Prior MRecon Object
+PRI = TRN.Copy;
+PRI.Parameter.Recon.SENSE = 'Yes';  % CLEAR coil combination
+
+% DC/Baseline MRecon Object
+DC = ACQ.Copy;
+DC.Data = sum( sum( DC.Data, dim.chan ), dim.dyn );
+
+% Sweep Parameters
+if ( isSweepAcq )
+
+    numSwpWindows = numel( swpWinLoca );
+    swpWinSpacing = unique( diff( swpWinLoca ) );
+    numSlice      = numSwpWindows;
+
+    fprintf( 'Sweep Acquisition: Windowing K-Space ... \n' ),
+    fprintf( '    No. Sweep Windows    = %3i \n', numSwpWindows ),
+    fprintf( '    Sweep Window Width   = %3i \n', swpWinFullWidth ),
+    fprintf( '    Sweep Window Spacing = %3i \n', swpWinSpacing ),
+
+    % Update RCN/DC MRecon Objects
+    RCN.Data = single( zeros( size(RCN.Data,1),size(RCN.Data,2),1,1,swpWinFullWidth,1,1,numSwpWindows ) );
+    DC.Data  = single( zeros( size(RCN.Data,1),size(RCN.Data,2),1,1,1,1,1,numSwpWindows ) );
+
+end    
+
+
+
 if ( isReconKtSense )
-    
-    % Display Start Message
-    fprintf( 'Performing k-t SENSE reconstruction  \n' ),
-    
-    % k-t SENSE Reconstruction MRecon Object
-    RCN = ACQ.Copy;
-    RCN.Data = sum (RCN.Data, dim.chan );
-    
-    % k-t SENSE Prior MRecon Object
-    PRI = TRN.Copy;
-    PRI.Parameter.Recon.SENSE = 'Yes';  % CLEAR coil combination
-    
-    % DC/Baseline MRecon Object
-    DC = ACQ.Copy;
-    DC.Data = sum( sum( DC.Data, dim.chan ), dim.dyn );
-    
-    numSlice = size( RCN.Data, dim.loca );
-    
-    % Partition Sweep Data
-    if ( isSweepAcq )
-        
-        fprintf( 'Reconstructing Sweep Acquisition ... \n' ),
-        
-        nX   = size( ACQ.Data, dim.x );
-        nY   = size( ACQ.Data, dim.y );
-        nZ   = size( ACQ.Data, dim.loca );
-        nT   = size( ACQ.Data, dim.dyn );
-        nC   = size( ACQ.Data, dim.chan );        
-        nZnT = nT * nZ; % = No. 'Frames' in Sweep volume
-        
-        % Configure Sweep k-space Kernels
-        clear swpKernels ktAcqSwpKrn ktTrnSwpKrn
-        
-        swpKrnHalfWidth = ceil( swpKrnFullWidth / 2 );
-        
-        if swpKrnLoca
-            swpKrnSpacing = unique( diff( swpKrnLoca ) );
-        end
-        
-        if isempty(swpKrnSpacing)
-            swpKrnSpacing = swpKrnFullWidth; % M2D equivalent
-        end
-        
-        if isempty(swpKrnLoca)
-            swpKrnLoca = swpKrnHalfWidth:swpKrnSpacing:nZnT;
-        end
-        
-        nSwpKrn = numel( swpKrnLoca );
-        
-        % Array Sweep Kernels
-        for iKrn = 1:nSwpKrn
-            swpKernels(:,iKrn) = ...
-                swpKrnLoca(iKrn)-swpKrnHalfWidth+1:swpKrnLoca(iKrn)+swpKrnHalfWidth;
-        end
-        
-        % Ensure Kernels within Acquisition Bounds
-        [~,swpKrnOutOfBounds,~] = find(swpKernels > nZnT);
-        swpKernels( :, unique(swpKrnOutOfBounds) ) = [];
-        nSwpKrn = size( swpKernels, 2 );
 
-        % Plot Sweep Kernels
-        if isVerbose
-
-            % Sweep Kernels
-            figure; hold on;
-            plot(swpKernels','.b');
-            
-            % M2D Frames
-            m2dKrnLoca = 0:nT:nZnT;
-            for iKrn = 1:numel(m2dKrnLoca)
-                plot(1:nSwpKrn, repmat(m2dKrnLoca(iKrn),1,nSwpKrn),'k--');
-            end
-            
-            xlabel('Sweep Kernel No.'); ylabel('Frame Index');
-            legend('Sweep Kernels','Location','NorthWest');
-            axis([1 nSwpKrn 1 nZnT]);
-            
-            % Save
-            hFig = gcf; hFig.Name = strcat( outFilePrefix, '_swp_kernels' );
-            saveas( hFig, [outputDirPath '/' hFig.Name, '.fig' ] );
-            saveas( hFig, [outputDirPath '/' hFig.Name, '.png' ] ); clear hFig;
-            
-        end
-        
-        
-        % Reshape ACQ & TRN Data
-        ktAcqSwp    = swap_dim_reconframe_to_xydcl( ACQ.Data );
-        ktAcqSwp    = reshape( permute( ktAcqSwp, [1,2,4,3,5] ), nX, nY, nC, nT*nZ );
-        ktAcqSwpKrn = single( zeros ( nX, nY, nC, nSwpKrn, swpKrnFullWidth ) );
-        for iKrn = 1:nSwpKrn
-            ktAcqSwpKrn(:,:,:,iKrn,:) = ktAcqSwp(:,:,:,swpKernels(:,iKrn));
-        end
-        ktAcqSwpKrn = permute( ktAcqSwpKrn, [1,2,5,3,4] );
-        clear ktAcqSwp
-        
-        ktTrnSwp    = swap_dim_reconframe_to_xydcl( TRN.Data );
-        ktTrnSwp    = reshape( permute( ktTrnSwp, [1,2,4,3,5] ), nX, nY, nC, nT*nZ );
-        ktTrnSwpKrn = single( zeros ( nX, nY, nC, nSwpKrn, swpKrnFullWidth ) );
-        for iKrn = 1:nSwpKrn
-            ktTrnSwpKrn(:,:,:,iKrn,:) = ktTrnSwp(:,:,:,swpKernels(:,iKrn));
-        end
-        ktTrnSwpKrn = permute( ktTrnSwpKrn, [1,2,5,3,4] );
-        clear ktTrnSwp
-        
-        
-        % View Sweep Kernel Acq K-Space
-        if isVerbose
-            
-            figure;
-            if nSwpKrn > 12
-                numKrnToPlot = 12;
-            else
-                numKrnToPlot = nSwpKrn;
-            end
-            krnToPlot = round(linspace(1,nSwpKrn,numKrnToPlot));
-            for ii = 1:numKrnToPlot
-                subplot(4,3,ii);
-                imagesc(squeeze(abs( ...
-                    ktAcqSwpKrn(ceil(nX/2),:,:,ceil(nC/2),krnToPlot(ii)) )), [0, 500] );
-                title(['Kernel No. ' num2str(krnToPlot(ii))]);
-                colormap('gray');
-            end
-            
-            % Save
-            hFig = gcf; hFig.Name = strcat( outFilePrefix, '_swp_kernel_kspace' );
-            saveas( hFig, [outputDirPath '/' hFig.Name, '.fig' ] );
-            saveas( hFig, [outputDirPath '/' hFig.Name, '.png' ] ); clear hFig;
-             
-        end
-        
-        fprintf( 'No. Sweep Kernels    = %3i \n', nSwpKrn ),
-        fprintf( 'Sweep Kernel Width   = %3i \n', swpKrnFullWidth ),
-        fprintf( 'Sweep Kernel Spacing = %3i \n', swpKrnSpacing ),
-
-        % Save Sweep Kernel Parameters
-        swpParamMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_swp_parameters.mat' ) );
-        save( swpParamMatFilePath, 'swpKernels', 'nSwpKrn', 'swpKrnFullWidth', 'swpKrnHalfWidth', 'swpKrnLoca', 'swpKrnSpacing', '-v7.3' );   
-        
-        
-        % Weighted CSM Message
-        fprintf( 'Creating Weighted CSM ... \n' ),
-        
-        % CSM Original Locations
-        csmLoca = 1:nZnT;
-        csmLoca = reshape(csmLoca, [], nZ);
-
-        % CSM Identifier Matrix
-        csmIDs = 1:nZ;
-        csmIDs = repmat(csmIDs,nT,1);
-
-        
-        % Calculate CSM Weighting Matrices
-        csmOverlapFractions = [];
-        uWgt = {}; % Note: need to be arrays to account for kernels overlapping singular or multiple csmLoca
-        W    = {}; % Big matrix array of weights for simple .* with original CSM
-        
-        for iKrn = 1:nSwpKrn
-            
-            currKrn    = swpKernels(:,iKrn);
-            currWgt    = csmIDs(csmLoca(currKrn));
-            uWgt{iKrn} = unique(currWgt);
-            
-            % Overlap Between Kernels and Original CSM
-            for iWgt = 1:numel(uWgt{iKrn})
-                csmOverlapFractions(iWgt,iKrn) = sum(currWgt == uWgt{iKrn}(iWgt));
-                Wgts(iWgt,iKrn)          = csmOverlapFractions(iWgt,iKrn) / swpKrnFullWidth;
-                
-                % Create Weights Matrices
-                W{iKrn}(:,:,:,:,iWgt) = Wgts(iWgt,iKrn) * single( ones( [nX, nY, 1, nC] ) );
-            end
-            
-        end
-        
-        % Create Weighted CSM by Linear Combination
-        csmWgt = single( zeros( [nX, nY, 1, nC, nSwpKrn] ) );
-        
-        for iKrn = 1:nSwpKrn
-            csmWgt(:,:,:,:,iKrn) = sum( W{iKrn} .* csm(:,:,:,:,uWgt{iKrn}), 5 );
-        end
-        
-        % Save Weighted CSM
-        csmWgtMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_csm_wgt.mat' ) );
-        save( csmWgtMatFilePath, 'csmWgt', 'Wgts', 'uWgt', 'csmLoca', '-v7.3' );
-                
-        % Memory Management
-        clear W Wgts uWgt csmLoca csmIDs csmOverlapFractions currKrn currWgt
-
-        % TODO: Do I need to update ACQ/TRN objects here?:
-        % Maybe I should perform the csmSwp processing in the csm block
-        %     ACQ.Parameter.Recon.Sensitivities = SENS;
-        %     TRN.Parameter.Recon.Sensitivities = SENS;
-        
-        numSlice = nSwpKrn;
-        
-        RCN.Data = single( zeros( nX,nY,1,1,swpKrnFullWidth,1,1,nSwpKrn ) );
-        DC.Data  = single( zeros( nX,nY,1,1,1,1,1,nSwpKrn ) );
-        
-    end
-    
-    
-    % Process Slice-by-Slice
-%     keyboard; 
-%     W=74; RCN.Data = RCN.Data(:,:,:,:,1:W,:,:,:); % vary M2D width
     for iSlice = 1:numSlice
         
-        % Get Data from MRecon Objects
+        % Get Data for ktrecon
         if isSweepAcq
-            ktAcq       = ktAcqSwpKrn(:,:,:,:,iSlice);
-            ktTrn       = ktTrnSwpKrn(:,:,:,:,iSlice);
-            csm         = csmWgt(:,:,:,:,iSlice);
-%             warning('REMINDER TOMO: CSM original in use.');
-%             csm         = swap_dim_reconframe_to_xydcl( ACQ.Parameter.Recon.Sensitivities.Sensitivity(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
-            noiseCov    = SENS.Psi;
+            
+            [ktAcq, ktTrn] = mrecon_ktsweep_window( ACQ, TRN, swpWinFullWidth, ...
+                'sweepwindowlocations', swpWinLoca, ...
+                'sweepwindowindex', iSlice  );
+            
+            csm      = csmWgt(:,:,:,:,iSlice);
+            noiseCov = SENS.Psi;
             
             % Display Start Message
-            disp_start_step_msg( sprintf( '  kernel %3i of %1i  \n', iSlice, numSlice ) )
+            disp_start_step_msg( sprintf( '  window %3i of %1i  \n', iSlice, numSlice ) )
             
         else
             ktAcq       = swap_dim_reconframe_to_xydcl( ACQ.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
             ktTrn       = swap_dim_reconframe_to_xydcl( TRN.Data(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
             csm         = swap_dim_reconframe_to_xydcl( ACQ.Parameter.Recon.Sensitivities.Sensitivity(:,:,:,:,:,:,:,iSlice,:,:,:,:) );
             noiseCov    = SENS.Psi;
-            
-%             warning('Hard-code REMINDER TOMO: Reduced nFrames in k-t recon');
-%             ktAcq = ktAcq(:,:,75-(W/2):74+(W/2),:);
-%             ktTrn = ktTrn(:,:,75-(W/2):74+(W/2),:);
             
             % Display Start Message
             disp_start_step_msg( sprintf( '  slice %3i of %1i  \n', iSlice, numSlice ) )
@@ -775,8 +626,7 @@ if ( isReconKtSense )
     end
     
     % Memory Management
-    clear xfMask xfPri
-    clear ktAcqSwpKrn ktTrnSwpRcn
+    clear xfMask xfPri xtRcn
     clear ktAcqSwp ktTrnSwp
     clear ktAcq ktTrn
     clear csmSwp imCoilSwp imBodySwp
@@ -786,19 +636,19 @@ if ( isReconKtSense )
     
     % Recon Images
     mrecon_k2i( RCN )
-    mrecon_k2i( PRI )
+%     mrecon_k2i( PRI ) % TODO: is pre-allocated size correct for Sweep?
     mrecon_k2i( DC )
     
     % Postprocessing
     mrecon_postprocess( RCN );
-    mrecon_postprocess( PRI );
+%     mrecon_postprocess( PRI );
     mrecon_postprocess( DC );
     
     % Get Timing
     frameDuration = mrecon_calc_frame_duration( RCN );
     
     % Write Real-Time as NIfTI
-    rltAbNiiFilePath   = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_ab' ) );
+
     rltAbNiiFilePath   = mrecon_writenifti( RCN, rltAbNiiFilePath, 'frameduration', frameDuration, 'datatype', 'magnitude' );
     rltReNiiFilePath   = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_re' ) );
     rltReNiiFilePath   = mrecon_writenifti( RCN, rltReNiiFilePath, 'frameduration', frameDuration, 'datatype', 'real' );
@@ -809,6 +659,14 @@ if ( isReconKtSense )
     rltCplxNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_cplx' ) );
     rltCplxNiiFilePath = mrecon_writenifti( RCN, rltCplxNiiFilePath, 'frameduration', frameDuration, 'datatype', 'complex' );
    
+    if isSweepAcq
+        sweep_unfold_nifti( rltAbNiiFilePath );
+        sweep_unfold_nifti( rltReNiiFilePath );
+        sweep_unfold_nifti( rltImNiiFilePath );
+        sweep_unfold_nifti( rltPhNiiFilePath );
+        sweep_unfold_nifti( rltCplxNiiFilePath );
+    end
+    
     
     % Write Training as NIfTI
     priAbNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_trn_ab' ) );
@@ -841,15 +699,20 @@ if ( isReconKtSense )
     clear xtDc
     
     % Save Parameters
-    PARAM = mrecon_getparameters( RCN );
+    PARAM = mrecon_getparameters( RCN );    
+    
     if isSweepAcq
+        PARAM.Sweep.isSweepAcq      = true;
+        PARAM.Sweep.numSwpWindows     = numSwpWindows;
+        PARAM.Sweep.swpWinFullWidth = swpWinFullWidth;
+        PARAM.Sweep.swpWinSpacing   = swpWinSpacing;
+        PARAM.Sweep.Encoding.NrDyn  = [swpWinFullWidth, swpWinFullWidth]; % Update for preproc.m
+        
         PARAM.Timing = mrecon_getslicetiming_sweep( RCN, 'patchversion', patchVersion );
-        % TODO?: 
-        % Update NrDyn for compatibility with preproc.m?
-        % PARAM.Encoding.NrDyn = [swpKrnFullWidth, swpKrnFullWidth];
     else
         PARAM.Timing = mrecon_getslicetiming( RCN, 'patchversion', patchVersion );
     end
+    
     rltParamMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_parameters.mat' ) );
     save( rltParamMatFilePath, 'PARAM', '-v7.3' );
     

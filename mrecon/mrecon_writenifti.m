@@ -25,6 +25,7 @@ default.frameDuration  = 1;
 default.dataType       = 'magnitude';
 default.displayRange   = [];
 default.dataScaling    = [0 1];
+default.isSweepAcq     = false;
 
 
 %% Parse Input
@@ -49,13 +50,15 @@ add_param_fn(   p, 'displayrange', default.displayRange, ...
     @(x) validateattributes( x, {'numeric'}, {'vector','numel',2}, mfilename) );
 add_param_fn(   p, 'datascaling', default.dataScaling, ...
     @(x) validateattributes( x, {'numeric'}, {'vector','numel',2}, mfilename) );
+add_param_fn(   p, 'reconktsweep', default.isSweepAcq, ...
+    @(x) validateattributes( x, {'logical'}, {'scalar'}, mfilename) ); % TAR
 
 parse( p, MR, niiFilePath, varargin{:} );
 frameDuration  = p.Results.frameduration;
 dataType       = p.Results.datatype;
 displayRange   = p.Results.displayrange;
 dataScaling    = p.Results.datascaling;
-
+isSweepAcq     = p.Results.reconktsweep;
 
 %% Anonymous Functions
 
