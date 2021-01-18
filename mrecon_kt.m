@@ -46,7 +46,7 @@ default.reconOpts           = {};
 default.isReconKtSense      = true;
 default.isSweepAcq          = false; % TAR
 default.swpWinFullWidth     = 96; % TAR
-default.swpWinSpacing       = []; % TAR
+default.swpWinStride        = []; % TAR
 default.swpWinLoca          = []; % TAR
 default.ktRegStrength       = 0.0014;
 default.ktRegStrengthROI    = default.ktRegStrength / 100;
@@ -102,7 +102,7 @@ add_param_fn(   p, 'reconktsweep', default.isSweepAcq, ...
 add_param_fn(   p, 'sweepwindowwidth', default.swpWinFullWidth, ...
     @(x) validateattributes( x, {'numeric'}, {'positive','scalar'}, mfilename) ); % TAR
 
-add_param_fn(   p, 'sweepwindowspacing', default.swpWinSpacing, ...
+add_param_fn(   p, 'sweepwindowstride', default.swpWinStride, ...
     @(x) validateattributes( x, {'numeric'}, {'positive','scalar'}, mfilename) ); % TAR
 
 add_param_fn(   p, 'sweepwindowlocations', default.swpWinLoca, ...
@@ -147,7 +147,7 @@ reconOpts           = p.Results.reconoptionpairs;
 isReconKtSense      = p.Results.reconktsense;
 isSweepAcq          = p.Results.reconktsweep; % TAR
 swpWinFullWidth     = p.Results.sweepwindowwidth; % TAR
-swpWinSpacing       = p.Results.sweepwindowspacing; % TAR
+swpWinStride        = p.Results.sweepwindowstride; % TAR
 swpWinLoca          = p.Results.sweepwindowlocations; % TAR
 ktRegStrength       = p.Results.ktregstrength;
 ktRegStrengthROI    = p.Results.ktregstrengthroi;
@@ -265,6 +265,8 @@ mrecon_setreconparam( TRN, 'optionpairs', reconOpts );
 mrecon_preprocess( TRN );
 disp_time_elapsed_msg( toc )
 
+
+% TAR --- Commented out to prevent memory errors
 % Noise
 disp_start_step_msg( 'Loading and preprocessing noise data' )
 NOISE = MRecon( rawDataFilePath );
@@ -276,6 +278,7 @@ mrecon_setreconparam( NOISE, 'optionpairs', reconOpts );
 mrecon_preprocess( NOISE );
 disp_time_elapsed_msg( toc )
 
+
 % Save Data
 disp_start_step_msg( 'Saving k-space data' )
 ktAcq   = swap_dim_reconframe_to_xydcl( ACQ.Data );
@@ -283,12 +286,15 @@ ktTrn   = swap_dim_reconframe_to_xydcl( TRN.Data );
 ktNoise = swap_dim_reconframe_to_xydcl( NOISE.Data );
 kspaceMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_kspace.mat' ) );
 
-% warning('kspace.mat NOT saved.');
+warning('kspace.mat NOT saved.');
 % save( kspaceMatFilePath, 'ktAcq', 'ktTrn', 'ktNoise', '-v7.3' );
+% 
+% clear ktAcq ktTrn ktNoise
+% disp_time_elapsed_msg( toc )
+% disp_write_file_msg( kspaceMatFilePath )
 
-clear ktAcq ktTrn ktNoise
-disp_time_elapsed_msg( toc )
-disp_write_file_msg( kspaceMatFilePath )
+% warning('Recon kspace.mat only - Return set');
+% return;
 
 
 %% Calculate Coil Sensitivity Maps
@@ -357,8 +363,16 @@ TRN.Parameter.Recon.Sensitivities = SENS;
 
 % Generate & Save Weighted CSM for Sweep
 if isSweepAcq
+    
+    % Check Sweep Windows within Acquisition Bounds
+    swpWinLocaMax          = swpWinLoca + swpWinFullWidth/2;
+    swpWinLocaWithinBounds = swpWinLocaMax <= (size(ACQ.Data,dim.dyn) * size(ACQ.Data,dim.loca));
+    numWithinBounds        = numel(find(swpWinLocaWithinBounds));
+    swpWinLoca(numWithinBounds+1:end) = [];
+    
+    % Create Weighted CSMs
     for iWin = 1:numel( swpWinLoca )
-        [~, ~, csmWgt] = mrecon_ktsweep_window( ACQ, TRN, swpWinFullWidth, ...
+        [~, ~, csmWgt(:,:,:,:,iWin)] = mrecon_ktsweep_window( ACQ, TRN, swpWinFullWidth, ...
             'sweepwindowlocations', swpWinLoca, ...
             'sweepwindowindex', iWin  );
     end
@@ -526,24 +540,28 @@ PRI.Parameter.Recon.SENSE = 'Yes';  % CLEAR coil combination
 DC = ACQ.Copy;
 DC.Data = sum( sum( DC.Data, dim.chan ), dim.dyn );
 
+numSlice = size( RCN.Data, dim.loca );
+
 % Sweep Parameters
 if ( isSweepAcq )
 
     numSwpWindows = numel( swpWinLoca );
-    swpWinSpacing = unique( diff( swpWinLoca ) );
+    swpWinStride  = unique( diff( swpWinLoca ) );
+    swpWinOffset  = swpWinLoca(1) - swpWinFullWidth/2;
     numSlice      = numSwpWindows;
 
     fprintf( 'Sweep Acquisition: Windowing K-Space ... \n' ),
-    fprintf( '    No. Sweep Windows    = %3i \n', numSwpWindows ),
-    fprintf( '    Sweep Window Width   = %3i \n', swpWinFullWidth ),
-    fprintf( '    Sweep Window Spacing = %3i \n', swpWinSpacing ),
+    fprintf( '    No. Sweep Windows   = %3i \n', numSwpWindows ),
+    fprintf( '    Sweep Window Width  = %3i \n', swpWinFullWidth ),
+    fprintf( '    Sweep Window Stride = %3i \n', swpWinStride ),
+    fprintf( '    Sweep Window Offset = %3i \n', swpWinOffset ),
 
-    % Update RCN/DC MRecon Objects
+    % Update MRecon Objects
     RCN.Data = single( zeros( size(RCN.Data,1),size(RCN.Data,2),1,1,swpWinFullWidth,1,1,numSwpWindows ) );
+    PRI.Data = single( zeros( size(PRI.Data,1),size(PRI.Data,2),1,1,swpWinFullWidth,1,1,numSwpWindows ) );
     DC.Data  = single( zeros( size(RCN.Data,1),size(RCN.Data,2),1,1,1,1,1,numSwpWindows ) );
 
 end    
-
 
 
 if ( isReconKtSense )
@@ -636,19 +654,20 @@ if ( isReconKtSense )
     
     % Recon Images
     mrecon_k2i( RCN )
-%     mrecon_k2i( PRI ) % TODO: is pre-allocated size correct for Sweep?
+%     mrecon_k2i( PRI )
     mrecon_k2i( DC )
     
     % Postprocessing
     mrecon_postprocess( RCN );
-%     mrecon_postprocess( PRI );
+%     mrecon_postprocess( PRI ); % TODO: fix: error to do with csm/imcoil sizes
     mrecon_postprocess( DC );
     
     % Get Timing
     frameDuration = mrecon_calc_frame_duration( RCN );
     
     % Write Real-Time as NIfTI
-
+    
+    rltAbNiiFilePath   = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_ab' ) );
     rltAbNiiFilePath   = mrecon_writenifti( RCN, rltAbNiiFilePath, 'frameduration', frameDuration, 'datatype', 'magnitude' );
     rltReNiiFilePath   = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_re' ) );
     rltReNiiFilePath   = mrecon_writenifti( RCN, rltReNiiFilePath, 'frameduration', frameDuration, 'datatype', 'real' );
@@ -658,23 +677,15 @@ if ( isReconKtSense )
     rltPhNiiFilePath   = mrecon_writenifti( RCN, rltPhNiiFilePath, 'frameduration', frameDuration, 'datatype', 'phase' );
     rltCplxNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_cplx' ) );
     rltCplxNiiFilePath = mrecon_writenifti( RCN, rltCplxNiiFilePath, 'frameduration', frameDuration, 'datatype', 'complex' );
-   
-    if isSweepAcq
-        sweep_unfold_nifti( rltAbNiiFilePath );
-        sweep_unfold_nifti( rltReNiiFilePath );
-        sweep_unfold_nifti( rltImNiiFilePath );
-        sweep_unfold_nifti( rltPhNiiFilePath );
-        sweep_unfold_nifti( rltCplxNiiFilePath );
-    end
     
-    
+    % TODO: fix pri for sweep
     % Write Training as NIfTI
-    priAbNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_trn_ab' ) );
-    priAbNiiFilePath = mrecon_writenifti( PRI, priAbNiiFilePath, 'frameduration', frameDuration, 'datatype', 'magnitude' );
-    priReNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_trn_re' ) );
-    priReNiiFilePath = mrecon_writenifti( PRI, priReNiiFilePath, 'frameduration', frameDuration, 'datatype', 'real' );
-    priImNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_trn_im' ) );
-    priImNiiFilePath = mrecon_writenifti( PRI, priImNiiFilePath, 'frameduration', frameDuration, 'datatype', 'imaginary' );
+%     priAbNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_trn_ab' ) );
+%     priAbNiiFilePath = mrecon_writenifti( PRI, priAbNiiFilePath, 'frameduration', frameDuration, 'datatype', 'magnitude' );
+%     priReNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_trn_re' ) );
+%     priReNiiFilePath = mrecon_writenifti( PRI, priReNiiFilePath, 'frameduration', frameDuration, 'datatype', 'real' );
+%     priImNiiFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_trn_im' ) );
+%     priImNiiFilePath = mrecon_writenifti( PRI, priImNiiFilePath, 'frameduration', frameDuration, 'datatype', 'imaginary' );
 
     % Write DC as NIfTI
     dcAbNiiFilePath  = fullfile( outputDirPath, strcat( outFilePrefix, '_dc_ab' ) );
@@ -700,21 +711,33 @@ if ( isReconKtSense )
     
     % Save Parameters
     PARAM = mrecon_getparameters( RCN );    
+
+    if ~isSweepAcq
     
-    if isSweepAcq
-        PARAM.Sweep.isSweepAcq      = true;
-        PARAM.Sweep.numSwpWindows     = numSwpWindows;
-        PARAM.Sweep.swpWinFullWidth = swpWinFullWidth;
-        PARAM.Sweep.swpWinSpacing   = swpWinSpacing;
-        PARAM.Sweep.Encoding.NrDyn  = [swpWinFullWidth, swpWinFullWidth]; % Update for preproc.m
-        
-        PARAM.Timing = mrecon_getslicetiming_sweep( RCN, 'patchversion', patchVersion );
-    else
         PARAM.Timing = mrecon_getslicetiming( RCN, 'patchversion', patchVersion );
+    
+    elseif isSweepAcq 
+        
+        [~, ~, ~, PARAM.Sweep]     = mrecon_ktsweep_window( ACQ, TRN, swpWinFullWidth, 'sweepwindowlocations', swpWinLoca, 'sweepwindowindex', 1 ); % 1 just to get swpParam
+        PARAM.Sweep.numSwpWindows  = numSwpWindows;
+        PARAM.Sweep.Encoding.NrDyn = [swpWinFullWidth, swpWinFullWidth]; % Update for preproc.m
+        % TODO: confirm PARAM.Timing is correct
+        PARAM.Timing               = mrecon_getslicetiming_sweep( RCN, 'patchversion', patchVersion );
+        PARAM.Sweep                = orderfields( PARAM.Sweep );
+        
     end
     
     rltParamMatFilePath = fullfile( outputDirPath, strcat( outFilePrefix, '_rlt_parameters.mat' ) );
     save( rltParamMatFilePath, 'PARAM', '-v7.3' );
+    
+    % Save Unfolded Sweep NIfTI
+    if isSweepAcq
+        sweep_unfold_nifti( rltAbNiiFilePath, PARAM.Sweep );
+        sweep_unfold_nifti( rltReNiiFilePath, PARAM.Sweep );
+        sweep_unfold_nifti( rltImNiiFilePath, PARAM.Sweep );
+        sweep_unfold_nifti( rltPhNiiFilePath, PARAM.Sweep );
+        sweep_unfold_nifti( rltCplxNiiFilePath, PARAM.Sweep );
+    end
     
     % Display Time Elapsed Message
     disp_time_elapsed_msg( toc ),
@@ -725,10 +748,10 @@ if ( isReconKtSense )
     disp_write_file_msg( rltCplxNiiFilePath )
     disp_write_file_msg( rltParamMatFilePath )
     disp_write_file_msg( rltMatFilePath )
-    disp_write_file_msg( priAbNiiFilePath )
-    disp_write_file_msg( priReNiiFilePath )
-    disp_write_file_msg( priImNiiFilePath )
-    disp_write_file_msg( priMatFilePath )
+%     disp_write_file_msg( priAbNiiFilePath ) % TODO: reinstate when fixed
+%     disp_write_file_msg( priReNiiFilePath )
+%     disp_write_file_msg( priImNiiFilePath )
+%     disp_write_file_msg( priMatFilePath )
     disp_write_file_msg( dcAbNiiFilePath )
     disp_write_file_msg( dcReNiiFilePath )
     disp_write_file_msg( dcImNiiFilePath )
