@@ -9,7 +9,7 @@ function [ktAcqWin, ktTrnWin, csmWgt, swpParams] = mrecon_ktsweep_window( ACQ, T
 %
 %   MRECON_KT( ..., 'sweepwindowlocations', swpWinLoca )
 %
-%   MRECON_KT( ..., 'sweepwindowspacing', swpWinSpacing )
+%   MRECON_KT( ..., 'sweepwindowstride', swpWinStride )
 %
 %   MRECON_KT( ..., 'sweepwindowindex', iWin )
 %
@@ -37,8 +37,9 @@ nZnT     = nT * nZ;                        % no. loca in Sweep volume
 
 default.outputDirPath       = pwd;
 default.outFilePrefix       = '';
-default.swpWinSpacing       = [];
+default.swpWinStride        = [];
 default.swpWinLoca          = [];
+default.swpWinOffset        = 0;
 default.iWin                = [];
 default.isVerbose           = false;
 
@@ -69,11 +70,14 @@ add_param_fn(   p, 'outputdir', default.outputDirPath, ...
 add_param_fn(   p, 'outputname', default.outFilePrefix, ...
     @(x) validateattributes( x, {'char'}, {'nonempty','vector'}, mfilename) );
 
-add_param_fn(   p, 'sweepwindowspacing', default.swpWinSpacing, ...
+add_param_fn(   p, 'sweepwindowstride', default.swpWinStride, ...
     @(x) validateattributes( x, {'numeric'}, {'positive','scalar'}, mfilename) ); % TAR
 
 add_param_fn(   p, 'sweepwindowlocations', default.swpWinLoca, ...
     @(x) validateattributes( x, {'numeric'}, {'positive','vector'}, mfilename) ); % TAR
+
+add_param_fn(   p, 'sweepwindowoffset', default.swpWinOffset, ...
+    @(x) validateattributes( x, {'numeric'}, {'positive','scalar'}, mfilename) ); % TAR
 
 add_param_fn(   p, 'sweepwindowindex', default.iWin, ...
     @(x) validateattributes( x, {'numeric'}, {'positive'}, mfilename) );
@@ -85,8 +89,9 @@ parse( p, ACQ, TRN, swpWinFullWidth, varargin{:} );
 
 outputDirPath       = p.Results.outputdir;
 outFilePrefix       = p.Results.outputname;
-swpWinSpacing       = p.Results.sweepwindowspacing;
+swpWinStride        = p.Results.sweepwindowstride;
 swpWinLoca          = p.Results.sweepwindowlocations;
+swpWinOffset        = p.Results.sweepwindowoffset;
 iWin 			    = p.Results.sweepwindowindex;
 isVerbose           = p.Results.verbose;
 
@@ -126,13 +131,14 @@ swpWinHalfWidth = ceil( swpWinFullWidth / 2 );
 
 % Window Locations (centre points)
 if swpWinLoca
-    swpWinSpacing = unique( diff( swpWinLoca ) );
-elseif isempty( swpWinSpacing )
-    swpWinSpacing = swpWinFullWidth; % M2D equivalent
+    swpWinOffset  = swpWinLoca(1) - swpWinFullWidth/2;
+    swpWinStride = unique( diff( swpWinLoca ) );
+elseif isempty( swpWinStride )
+    swpWinStride = swpWinFullWidth; % M2D equivalent
 end
 
 if isempty( swpWinLoca )
-    swpWinLoca = swpWinHalfWidth:swpWinSpacing:nZnT;
+    swpWinLoca = swpWinOffset+swpWinWidths/2 : swpWinStride : nZnT;
 end
 
 numSwpWindows = numel( swpWinLoca );
@@ -282,11 +288,13 @@ end
 
 swpParams                 = struct;
 
+swpParams.isSweepAcq      = true;
 swpParams.swpWindows      = swpWindows;
 swpParams.numSwpWindows   = numSwpWindows;
 swpParams.swpWinFullWidth = swpWinFullWidth;
 swpParams.swpWinLoca      = swpWinLoca;
-swpParams.swpWinSpacing   = swpWinSpacing;
+swpParams.swpWinStride    = swpWinStride;
+swpParams.swpWinOffset    = swpWinOffset;
 
 
 

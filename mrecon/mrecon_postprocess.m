@@ -13,7 +13,8 @@ MR.ConcomitantFieldCorrection;
 MR.DivideFlowSegments;
 MR.CombineCoils;
 MR.Average;
-MR.GeometryCorrection;
+% MR.GeometryCorrection;
+warning('MR.GeometryCorrection = switched off')
 MR.RemoveOversampling;
 MR.FlowPhaseCorrection;
 MR.ReconTKE;

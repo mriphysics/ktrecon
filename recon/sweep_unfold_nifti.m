@@ -23,7 +23,7 @@ nT   = size( nii4d.img, 4 );
 nZnT = nZ*nT;
 
 warning('apodLength hard-coded = 0');
-apodLength = 12;
+apodLength = 0;
 
 
 %% Init 3D nifti
