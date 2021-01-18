@@ -18,7 +18,11 @@ function [ xtRcn_Filtered, swpParams ] = sweep_window_filter( xtRcn, swpParams, 
 %   TAR (t.roberts@kcl.ac.uk)
 
 
+% TODO: generalise resultsDir so not just = 'cardsync'
+pngfigDir = fullfile( 'cardsync', 'figs', 'png' );
+matfigDir = fullfile( 'cardsync', 'figs', 'fig' );
 isVerbose = false;
+
 
 %% Data Information
 nX   = size( xtRcn, 1 );
@@ -42,41 +46,47 @@ iWin2(:,1) = 1+swpParams.swpWinStride : swpParams.swpWinStride+swpParams.swpWinF
 
 %% View Overlapping Slices
 
+iSlice1 = round( size(xtRcn,3)/2 ); iSlice2 = iSlice1 + 1;
+
+xtRcn_norm = xtRcn./max(xtRcn(:));
+
+xtRcn_diff = abs(squeeze(xtRcn_norm(:,:,iSlice1,iOF1))-...
+    squeeze(xtRcn_norm(:,:,iSlice2,iOF2)));
+
 if isVerbose
-   
-    iSlice1 = round( size(xtRcn,3)/2 ); iSlice2 = iSlice1 + 1;
-    
-    xtRcn_norm = xtRcn./max(xtRcn(:));
-
-    xtRcn_diff = abs(squeeze(xtRcn_norm(:,:,iSlice1,iOF1))-...
-                     squeeze(xtRcn_norm(:,:,iSlice2,iOF2)));
-
     implay_RR( [squeeze(xtRcn_norm(:,:,iSlice1,iOF1)),...
-                squeeze(xtRcn_norm(:,:,iSlice2,iOF2)),...
-                xtRcn_diff ],...
-                'gray',[0,0.5]);
-    
+        squeeze(xtRcn_norm(:,:,iSlice2,iOF2)),...
+        xtRcn_diff ],...
+        'gray',[0,0.5]);
 end
 
 
 %% Assess Similarity Of Intersecting Frames
 
 if nargin < 3
-    rangeBadFrames = round( swpParams.swpWinFullWidth * (1/8) ); % e.g.: 96*1/8 * 2 = omit quarter of frames from each window 
-    % rangeBadFrames = 0; % Do not perform window filtering
+%     rangeBadFrames = round( swpParams.swpWinFullWidth * (1/8) ); % e.g.: 96*1/8 * 2 = omit quarter of frames from each window 
+    rangeBadFrames = 0; % Do not perform window filtering
 end
     
-if isVerbose
-    diffScore = squeeze( mean( mean (xtRcn_diff, 1), 2) );
 
-    rangeSimilarFrames = 1+rangeBadFrames:(swpParams.swpWinFullWidth-swpParams.swpWinStride)-rangeBadFrames;
+diffScore = squeeze( mean( mean (xtRcn_diff, 1), 2) );
 
-    figure; hold on;
-    plot(diffScore,'.-k','Markersize',10);
-    plot(rangeSimilarFrames,diffScore(rangeSimilarFrames),'.-r','Markersize',10);
-    xlabel('Image number');
-    ylabel('Difference Score (a.u.)');
-    legend('All Frames','Frames After Filter','Location','NorthEast');
+rangeSimilarFrames = 1+rangeBadFrames:(swpParams.swpWinFullWidth-swpParams.swpWinStride)-rangeBadFrames;
+
+figure; hold on;
+plot(diffScore,'.-k','Markersize',10);
+plot(rangeSimilarFrames,diffScore(rangeSimilarFrames),'.-r','Markersize',10);
+xlabel('Image number');
+ylabel('Difference Score (a.u.)');
+legend('All Frames','Frames After Filter','Location','NorthEast');
+
+% Save Fig
+hFig = gcf;
+hFig.Name = sprintf( 'sweep_window_apodization_example' );
+save_figs( pngfigDir, hFig, matfigDir )
+
+if ~isVerbose
+    close( hFig )
 end
 
 
